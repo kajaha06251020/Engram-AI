@@ -21,7 +21,8 @@ def test_cli_crystallize_no_data(tmp_path, monkeypatch):
     monkeypatch.setenv("ENGRAM_AI_STORAGE", str(tmp_path / "data"))
     runner = CliRunner()
     result = runner.invoke(main, ["crystallize"])
-    assert "No new skills" in result.output or result.exit_code == 0
+    assert result.exit_code == 0
+    assert "No new skills" in result.output
 
 
 def test_cli_query(tmp_path, monkeypatch):
@@ -29,3 +30,4 @@ def test_cli_query(tmp_path, monkeypatch):
     runner = CliRunner()
     result = runner.invoke(main, ["query", "test context"])
     assert result.exit_code == 0
+    assert "No relevant experiences found." in result.output
