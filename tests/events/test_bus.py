@@ -1,5 +1,3 @@
-import pytest
-
 def test_subscribe_and_emit():
     from engram_ai.events.bus import EventBus
     bus = EventBus()
@@ -21,7 +19,10 @@ def test_unsubscribe():
     from engram_ai.events.bus import EventBus
     bus = EventBus()
     received = []
-    callback = lambda p: received.append(p)
+
+    def callback(p):
+        received.append(p)
+
     bus.on("evt", callback)
     bus.off("evt", callback)
     bus.emit("evt", {"data": 1})

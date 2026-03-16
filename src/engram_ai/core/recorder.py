@@ -1,4 +1,3 @@
-import json
 import logging
 import re
 import sys
@@ -105,7 +104,7 @@ class Recorder:
         if not self._pending_path or not self._pending_path.exists():
             return None
         lines = self._pending_path.read_text(encoding="utf-8").strip().split("\n")
-        lines = [l for l in lines if l.strip()]
+        lines = [line for line in lines if line.strip()]
         if not lines:
             return None
         return Experience.model_validate_json(lines[-1])
@@ -114,7 +113,7 @@ class Recorder:
         if not self._pending_path or not self._pending_path.exists():
             return
         lines = self._pending_path.read_text(encoding="utf-8").strip().split("\n")
-        lines = [l for l in lines if l.strip()]
+        lines = [line for line in lines if line.strip()]
         if lines:
             lines.pop()
         self._pending_path.write_text("\n".join(lines) + "\n" if lines else "", encoding="utf-8")

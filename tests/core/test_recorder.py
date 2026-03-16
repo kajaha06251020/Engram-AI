@@ -1,6 +1,5 @@
 import json
 import pytest
-from engram_ai.models.experience import Experience
 
 @pytest.fixture
 def storage(tmp_path):

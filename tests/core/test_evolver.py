@@ -41,7 +41,7 @@ def test_evolve_writes_to_config(storage, evolver, tmp_path):
     _seed_skills(storage)
     config_path = str(tmp_path / "CLAUDE.md")
     (tmp_path / "CLAUDE.md").write_text("# Rules\n", encoding="utf-8")
-    record = evolver.evolve(config_path=config_path)
+    evolver.evolve(config_path=config_path)
     content = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
     assert "# Rules" in content
     assert "<!-- engram-ai:start -->" in content
