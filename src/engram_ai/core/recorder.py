@@ -16,7 +16,7 @@ POSITIVE_KEYWORDS = re.compile(
     re.IGNORECASE,
 )
 NEGATIVE_KEYWORDS = re.compile(
-    r"違う|wrong|fix|no[,.\s]|ダメ|だめ|間違|error|incorrect|やり直|修正して",
+    r"違う|wrong|fix|\bno[,.]\s|ダメ|だめ|間違|error|incorrect|やり直|修正して",
     re.IGNORECASE,
 )
 NEUTRAL_KEYWORDS = re.compile(

@@ -148,9 +148,23 @@ def create_mcp_server(forge: Forge) -> Server:
     return server
 
 
-async def run_mcp_server():
+async def run_mcp_server(forge: Forge | None = None):
     """Run the MCP server on stdio."""
-    forge = Forge()
+    if forge is None:
+        import json
+        import os
+        from pathlib import Path
+
+        config_dir = Path.home() / ".engram-ai"
+        config_file = config_dir / "config.json"
+        storage_override = os.environ.get("ENGRAM_AI_STORAGE")
+        if storage_override:
+            forge = Forge(storage_path=storage_override)
+        elif config_file.exists():
+            config = json.loads(config_file.read_text(encoding="utf-8"))
+            forge = Forge(storage_path=config.get("storage_path", str(config_dir / "data")))
+        else:
+            forge = Forge()
     server = create_mcp_server(forge)
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream)
