@@ -7,6 +7,8 @@ from engram_ai.models.skill import Skill
 from engram_ai.storage.base import BaseStorage
 
 logger = logging.getLogger(__name__)
+# Lowered from 0.8 to 0.4: ChromaDB's default embedding model produces
+# max ~0.59 cosine similarity for short near-duplicate texts.
 SIMILARITY_THRESHOLD = 0.4
 
 class Crystallizer:
