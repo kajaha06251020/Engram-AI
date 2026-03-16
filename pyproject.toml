@@ -1,0 +1,38 @@
+[project]
+name = "engram-ai"
+version = "0.1.0"
+description = "Experience-driven memory infrastructure for AI agents"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+keywords = ["ai", "agent", "memory", "experience", "learning"]
+
+dependencies = [
+    "anthropic>=0.40.0",
+    "chromadb>=0.5.0",
+    "click>=8.0.0",
+    "pydantic>=2.0.0",
+    "mcp>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+]
+
+[project.scripts]
+engram-ai = "engram_ai.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/engram_ai"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
