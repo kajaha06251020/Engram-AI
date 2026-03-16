@@ -169,7 +169,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     def on_event(event_name: str):
         def handler(payload):
-            data = {"event": event_name, "data": payload.model_dump()}
+            data = {"event": event_name, "data": payload.model_dump(mode="json")}
             loop.call_soon_threadsafe(queue.put_nowait, data)
 
         return handler
