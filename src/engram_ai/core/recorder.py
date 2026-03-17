@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from engram_ai.events.bus import EventBus
-from engram_ai.events.events import EXPERIENCE_PENDING, EXPERIENCE_RECORDED
+from engram_ai.events.events import EXPERIENCE_CHAINED, EXPERIENCE_PENDING, EXPERIENCE_RECORDED
 from engram_ai.models.experience import Experience
 from engram_ai.storage.base import BaseStorage
 
@@ -34,14 +34,30 @@ class Recorder:
         self._pending_path = Path(pending_path) if pending_path else None
         self._llm = llm
 
-    def record(self, action: str, context: str, outcome: str, valence: float, metadata: dict | None = None) -> Experience:
-        exp = Experience(action=action, context=context, outcome=outcome, valence=valence, metadata=metadata or {}, status="complete")
+    def record(self, action: str, context: str, outcome: str, valence: float,
+               metadata: dict | None = None, parent_id: str | None = None) -> Experience:
+        # Auto-link: find related experiences
+        related_ids = []
+        try:
+            similar = self._storage.query_experiences(context, k=5)
+            related_ids = [exp.id for exp, sim in similar if sim >= 0.5][:5]
+        except Exception:
+            logger.warning("Auto-link failed, continuing without related_ids")
+
+        exp = Experience(
+            action=action, context=context, outcome=outcome,
+            valence=valence, metadata=metadata or {},
+            status="complete", parent_id=parent_id, related_ids=related_ids,
+        )
         self._storage.store_experience(exp)
         self._event_bus.emit(EXPERIENCE_RECORDED, exp)
+        if parent_id or related_ids:
+            self._event_bus.emit(EXPERIENCE_CHAINED, exp)
         return exp
 
-    def record_pending(self, action: str, context: str, metadata: dict | None = None) -> None:
-        exp = Experience(action=action, context=context, outcome="", valence=0.0, metadata=metadata or {}, status="pending")
+    def record_pending(self, action: str, context: str, metadata: dict | None = None,
+                       parent_id: str | None = None) -> None:
+        exp = Experience(action=action, context=context, outcome="", valence=0.0, metadata=metadata or {}, status="pending", parent_id=parent_id)
         if self._pending_path:
             self._pending_path.parent.mkdir(parents=True, exist_ok=True)
             self._locked_append(exp.model_dump_json() + "\n")
@@ -53,7 +69,11 @@ class Recorder:
             logger.info("No pending experience to complete")
             return
         self._remove_last_pending()
-        self.record(action=pending.action, context=pending.context, outcome=outcome, valence=valence, metadata=pending.metadata)
+        self.record(
+            action=pending.action, context=pending.context,
+            outcome=outcome, valence=valence,
+            metadata=pending.metadata, parent_id=pending.parent_id,
+        )
 
     def detect_valence(self, message: str) -> float:
         """Tiered valence detection: keyword -> LLM -> default."""

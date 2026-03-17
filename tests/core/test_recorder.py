@@ -59,3 +59,51 @@ def test_valence_keyword_detection(recorder):
     assert recorder.detect_valence_keyword("違う、やり直して") < -0.5
     assert recorder.detect_valence_keyword("wrong, fix this") < -0.5
     assert recorder.detect_valence_keyword("some random text") is None
+
+
+def test_record_with_parent_id(tmp_path, mock_llm):
+    from engram_ai.core.recorder import Recorder
+    from engram_ai.events.bus import EventBus
+    from engram_ai.events.events import EXPERIENCE_CHAINED
+    from engram_ai.storage.chromadb import ChromaDBStorage
+
+    storage = ChromaDBStorage(persist_path=str(tmp_path / "db"))
+    bus = EventBus()
+    chained_events = []
+    bus.on(EXPERIENCE_CHAINED, lambda e: chained_events.append(e))
+    recorder = Recorder(storage, bus, llm=mock_llm)
+    exp = recorder.record("a", "c", "o", 0.5, parent_id="parent-123")
+    assert exp.parent_id == "parent-123"
+    assert len(chained_events) == 1
+
+
+def test_record_auto_links_related(tmp_path, mock_llm):
+    from engram_ai.core.recorder import Recorder
+    from engram_ai.events.bus import EventBus
+    from engram_ai.storage.chromadb import ChromaDBStorage
+
+    storage = ChromaDBStorage(persist_path=str(tmp_path / "db"))
+    bus = EventBus()
+    recorder = Recorder(storage, bus, llm=mock_llm)
+    # Record some initial experiences
+    recorder.record("fix API validation", "API validation context", "success", 0.9)
+    recorder.record("add API schema check", "API validation context", "success", 0.8)
+    # This one should auto-link to the above
+    exp = recorder.record("update API validators", "API validation and schema", "success", 0.7)
+    assert len(exp.related_ids) > 0
+
+
+def test_record_pending_preserves_parent_id(tmp_path, mock_llm):
+    from engram_ai.core.recorder import Recorder
+    from engram_ai.events.bus import EventBus
+    from engram_ai.storage.chromadb import ChromaDBStorage
+
+    storage = ChromaDBStorage(persist_path=str(tmp_path / "db"))
+    bus = EventBus()
+    pending_path = str(tmp_path / "pending.jsonl")
+    recorder = Recorder(storage, bus, pending_path=pending_path, llm=mock_llm)
+    recorder.record_pending("action", "context", parent_id="parent-456")
+    recorder.complete_pending("outcome", 0.5)
+    exps = storage.get_all_experiences()
+    assert len(exps) == 1
+    assert exps[0].parent_id == "parent-456"
