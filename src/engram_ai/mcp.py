@@ -152,6 +152,32 @@ def create_mcp_server(project_manager) -> Server:
                     "required": ["messages"],
                 },
             ),
+            Tool(
+                name="engram_teach",
+                description="Directly teach a skill/rule to Engram-AI without going through the experience cycle",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "rule": {"type": "string", "description": "The skill/rule to remember"},
+                        "context_pattern": {"type": "string", "description": "When this applies"},
+                        "skill_type": {
+                            "type": "string",
+                            "enum": ["positive", "anti"],
+                            "default": "positive",
+                            "description": "Skill type",
+                        },
+                        "confidence": {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 1.0,
+                            "default": 0.8,
+                            "description": "Initial confidence",
+                        },
+                        "project": {"type": "string", "description": "Project name", "default": "default"},
+                    },
+                    "required": ["rule", "context_pattern"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -248,6 +274,21 @@ def create_mcp_server(project_manager) -> Server:
                     for s in result["crystallized"]:
                         lines.append(f"  - {s.rule} (confidence: {s.confidence:.2f})")
                 return [TextContent(type="text", text="\n".join(lines))]
+
+            elif name == "engram_teach":
+                pre_count = len(forge._storage.get_all_skills())
+                skill = forge.teach(
+                    rule=arguments["rule"],
+                    context_pattern=arguments["context_pattern"],
+                    skill_type=arguments.get("skill_type", "positive"),
+                    confidence=arguments.get("confidence", 0.8),
+                )
+                post_count = len(forge._storage.get_all_skills())
+                if post_count > pre_count:
+                    text = f'Taught: "{skill.rule}" (confidence: {skill.confidence:.2f})'
+                else:
+                    text = f'Reinforced existing skill: "{skill.rule}" (confidence: {skill.confidence:.2f})'
+                return [TextContent(type="text", text=text)]
 
             else:
                 return [TextContent(type="text", text=f"Unknown tool: {name}")]
