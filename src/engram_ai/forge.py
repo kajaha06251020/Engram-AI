@@ -97,7 +97,9 @@ class Forge:
 
     def record(self, action: str, context: str, outcome: str, valence: float,
                metadata: dict | None = None, parent_id: str | None = None) -> Experience:
-        return self._recorder.record(action, context, outcome, valence, metadata, parent_id)
+        exp = self._recorder.record(action, context, outcome, valence, metadata, parent_id)
+        self.check_skill_effectiveness(exp)
+        return exp
 
     def record_pending(self, action: str, context: str,
                        metadata: dict | None = None, parent_id: str | None = None) -> None:
@@ -142,6 +144,49 @@ class Forge:
 
     def detect_valence(self, message: str) -> float:
         return self._recorder.detect_valence(message)
+
+    def check_skill_effectiveness(self, experience: "Experience") -> list["Skill"]:
+        """Evaluate applied skills against a new experience.
+        Returns skills whose confidence was adjusted."""
+        from engram_ai.events.events import SKILL_EFFECTIVENESS_UPDATED
+
+        adjusted = []
+        try:
+            similar_skills = self._storage.query_skills(experience.context, k=5)
+        except Exception:
+            return adjusted
+
+        for skill, similarity in similar_skills:
+            if similarity < 0.5:
+                continue
+
+            changed = False
+            if experience.valence >= 0.3:
+                skill.prediction_hits += 1
+                changed = True
+            elif experience.valence <= -0.3:
+                skill.prediction_misses += 1
+                changed = True
+
+            if not changed:
+                continue
+
+            total = skill.prediction_hits + skill.prediction_misses
+            if total >= 3:
+                hit_rate = skill.prediction_hits / total
+                if hit_rate <= 0.3 and skill.prediction_misses >= 3:
+                    skill.confidence = round(skill.confidence * 0.7, 4)
+                    adjusted.append(skill)
+                elif hit_rate >= 0.8 and skill.prediction_hits >= 3:
+                    skill.confidence = min(1.0, round(skill.confidence + 0.1, 4))
+                    adjusted.append(skill)
+
+            self._storage.update_skill(skill)
+
+        for skill in adjusted:
+            self._event_bus.emit(SKILL_EFFECTIVENESS_UPDATED, skill)
+
+        return adjusted
 
     def observe(self, messages: list[dict], max_turns: int = 3,
                 crystallize_threshold: int = 5) -> dict:
