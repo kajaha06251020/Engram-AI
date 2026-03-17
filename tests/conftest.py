@@ -7,6 +7,8 @@ class MockLLM:
         self._valence_response = 0.5
         self._crystallize_response = []
         self._evolve_response = ""
+        self._verify_conflict_response = True
+        self._merge_skills_response = None
 
     def set_valence_response(self, valence: float):
         self._valence_response = valence
@@ -27,6 +29,29 @@ class MockLLM:
 
     def generate_evolution_text(self, skills: list[Skill]) -> str:
         return self._evolve_response
+
+    def set_verify_conflict_response(self, value: bool):
+        self._verify_conflict_response = value
+
+    def set_merge_skills_response(self, skill):
+        self._merge_skills_response = skill
+
+    def verify_conflict(self, skill_a, skill_b) -> bool:
+        return self._verify_conflict_response
+
+    def merge_skills(self, skill_a, skill_b):
+        if self._merge_skills_response:
+            return self._merge_skills_response
+        from engram_ai.models.skill import Skill
+        combined = list(set(skill_a.source_experiences + skill_b.source_experiences))
+        return Skill(
+            rule=f"Merged: {skill_a.rule} + {skill_b.rule}",
+            context_pattern=skill_a.context_pattern,
+            confidence=max(skill_a.confidence, skill_b.confidence),
+            source_experiences=combined,
+            evidence_count=skill_a.evidence_count + skill_b.evidence_count,
+            valence_summary=skill_a.valence_summary,
+        )
 
 @pytest.fixture
 def mock_llm():

@@ -67,3 +67,40 @@ class ClaudeLLM(BaseLLM):
                   "Output ONLY the markdown list, no headers or extra text.")
         skills_data = [{"rule": s.rule, "confidence": s.confidence} for s in skills]
         return self._call(system, json.dumps(skills_data, ensure_ascii=False))
+
+    def verify_conflict(self, skill_a: Skill, skill_b: Skill) -> bool:
+        system = (
+            "You determine if two AI agent skills contradict each other. "
+            "Respond with ONLY 'true' or 'false'."
+        )
+        user = (
+            f"Skill A: {skill_a.rule} (context: {skill_a.context_pattern})\n"
+            f"Skill B: {skill_b.rule} (context: {skill_b.context_pattern})\n"
+            "Do these skills contradict each other?"
+        )
+        result = self._call(system, user)
+        return result.strip().lower() == "true"
+
+    def merge_skills(self, skill_a: Skill, skill_b: Skill) -> Skill:
+        system = (
+            "You merge two contradicting AI agent skills into one unified skill. "
+            'Respond with JSON: {"rule": "...", "context_pattern": "...", "confidence": 0.0-1.0}'
+        )
+        user = (
+            f"Skill A: {skill_a.rule} (confidence: {skill_a.confidence})\n"
+            f"Skill B: {skill_b.rule} (confidence: {skill_b.confidence})\n"
+            "Create a merged skill that resolves the contradiction."
+        )
+        result = self._call(system, user)
+        parsed = json.loads(result)
+        combined_sources = list(set(skill_a.source_experiences + skill_b.source_experiences))
+        pos = skill_a.valence_summary.get("positive", 0) + skill_b.valence_summary.get("positive", 0)
+        neg = skill_a.valence_summary.get("negative", 0) + skill_b.valence_summary.get("negative", 0)
+        return Skill(
+            rule=parsed["rule"],
+            context_pattern=parsed.get("context_pattern", ""),
+            confidence=parsed.get("confidence", max(skill_a.confidence, skill_b.confidence)),
+            source_experiences=combined_sources,
+            evidence_count=skill_a.evidence_count + skill_b.evidence_count,
+            valence_summary={"positive": pos, "negative": neg},
+        )
