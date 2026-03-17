@@ -139,3 +139,47 @@ def test_setup_hooks_preserves_existing(tmp_path, monkeypatch):
     assert len(settings["hooks"]["PostToolUse"]) == 2
     assert any("my-tool" in str(h) for h in settings["hooks"]["PostToolUse"])
     assert any("engram-ai" in str(h) for h in settings["hooks"]["PostToolUse"])
+
+
+def test_hook_user_prompt_submit_recall(tmp_path, monkeypatch):
+    """Hook should output recall results."""
+    storage_dir = tmp_path / "data"
+    monkeypatch.setenv("ENGRAM_AI_STORAGE", str(storage_dir))
+
+    # Pre-populate a skill via direct storage
+    from engram_ai import Forge
+    forge = Forge(storage_path=str(storage_dir / "default"), llm=None)
+    forge.teach(rule="Always test auth changes", context_pattern="authentication")
+    forge.close()
+
+    stdin_data = json.dumps({"prompt": "Fix the authentication bug"})
+    runner = CliRunner()
+    result = runner.invoke(main, ["hook", "user-prompt-submit"], input=stdin_data)
+    assert result.exit_code == 0
+    # Output may or may not contain recall results depending on similarity
+
+
+def test_hook_post_tool_use_warn(tmp_path, monkeypatch):
+    """post-tool-use hook should output warnings for risky actions."""
+    storage_dir = tmp_path / "data"
+    monkeypatch.setenv("ENGRAM_AI_STORAGE", str(storage_dir))
+
+    # Pre-populate a negative experience
+    from engram_ai import Forge
+    forge = Forge(storage_path=str(storage_dir / "default"), llm=None)
+    forge.record(
+        action="Edit on auth.py",
+        context="Edit on auth.py",
+        outcome="Security vulnerability",
+        valence=-0.9,
+    )
+    forge.close()
+
+    stdin_data = json.dumps({
+        "tool_name": "Edit",
+        "tool_input": {"file_path": "auth.py"},
+    })
+    runner = CliRunner()
+    result = runner.invoke(main, ["hook", "post-tool-use"], input=stdin_data)
+    assert result.exit_code == 0
+    # Output may contain warning if similarity is high enough

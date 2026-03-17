@@ -319,6 +319,14 @@ def hook_post_tool_use():
             context=context,
             metadata={"tool": tool_name, "file": file_path},
         )
+
+        # Pre-emptive Warning: check for past failures with similar actions
+        warnings = forge.warn(action=action, context=context)
+        if warnings:
+            lines = ["Warning: past issues with similar actions:"]
+            for exp in warnings[:3]:
+                lines.append(f'- "{exp.outcome}" (valence: {exp.valence:.1f})')
+            print(json.dumps({"result": "\n".join(lines)}))
     except Exception:
         pass  # Hooks must never block Claude Code
 
@@ -350,6 +358,21 @@ def hook_user_prompt_submit():
                     forge.evolve(config_path=config_path)
                 except Exception:
                     pass  # Evolve failure should not block
+
+        # Active Recall: inject relevant skills and warnings
+        if user_message.strip():
+            recall_result = forge.recall(user_message)
+            lines = []
+            if recall_result["skills"]:
+                lines.append("Relevant knowledge:")
+                for s in recall_result["skills"]:
+                    lines.append(f"- {s.rule} (confidence: {s.confidence:.2f})")
+            if recall_result["warnings"]:
+                lines.append("Past issues in similar context:")
+                for exp in recall_result["warnings"]:
+                    lines.append(f'- {exp.outcome} (valence: {exp.valence:.1f})')
+            if lines:
+                print(json.dumps({"result": "\n".join(lines)}))
     except Exception:
         pass  # Hooks must never block Claude Code
 
