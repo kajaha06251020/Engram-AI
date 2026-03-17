@@ -27,3 +27,7 @@ class Skill(BaseModel):
 
     # v0.2: Lifecycle status
     status: str = "active"  # "active" | "superseded"
+
+    # v0.4: Feedback Loop
+    prediction_hits: int = 0
+    prediction_misses: int = 0
