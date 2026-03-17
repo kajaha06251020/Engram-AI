@@ -144,3 +144,33 @@ async def test_engram_observe_empty_messages(forge_and_server):
     _, server = forge_and_server
     result = await _call_tool(server, "engram_observe", {"messages": []})
     assert "No notable experience" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_list_tools_includes_teach(forge_and_server):
+    _, server = forge_and_server
+    tools = await _list_tools(server)
+    tool_names = [t.name for t in tools]
+    assert "engram_teach" in tool_names
+
+
+@pytest.mark.asyncio
+async def test_engram_teach_creates_skill(forge_and_server):
+    _, server = forge_and_server
+    result = await _call_tool(server, "engram_teach", {
+        "rule": "Always write tests first",
+        "context_pattern": "feature development",
+    })
+    assert "Taught" in result[0].text
+    assert "Always write tests first" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_engram_teach_anti_skill(forge_and_server):
+    _, server = forge_and_server
+    result = await _call_tool(server, "engram_teach", {
+        "rule": "Never use eval()",
+        "context_pattern": "Python code",
+        "skill_type": "anti",
+    })
+    assert "Taught" in result[0].text or "Reinforced" in result[0].text
