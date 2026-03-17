@@ -1,25 +1,30 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from engram_ai import Forge
 from engram_ai.dashboard.server import create_app
 from engram_ai.models.skill import Skill
 
 
 @pytest.fixture
 def forge(tmp_path, mock_llm):
-    return Forge(storage_path=str(tmp_path / "test_db"), llm=mock_llm)
+    from engram_ai.project import ProjectManager
+    pm = ProjectManager(base_path=tmp_path, llm=mock_llm, config={"default_project": "default"})
+    return pm.get_forge("default")
 
 
 @pytest.fixture
-def client(forge):
-    app = create_app(forge=forge)
+def client(tmp_path, mock_llm):
+    from engram_ai.project import ProjectManager
+    pm = ProjectManager(base_path=tmp_path, llm=mock_llm, config={"default_project": "default"})
+    app = create_app(project_manager=pm)
     return TestClient(app)
 
 
 @pytest.fixture
 def seeded_forge(tmp_path, mock_llm):
-    forge = Forge(storage_path=str(tmp_path / "test_db"), llm=mock_llm)
+    from engram_ai.project import ProjectManager
+    pm = ProjectManager(base_path=tmp_path, llm=mock_llm, config={"default_project": "default"})
+    forge = pm.get_forge("default")
     exp1 = forge.record(
         action="Used list comprehension",
         context="Data processing",
@@ -51,8 +56,38 @@ def seeded_forge(tmp_path, mock_llm):
 
 
 @pytest.fixture
-def seeded_client(seeded_forge):
-    app = create_app(forge=seeded_forge)
+def seeded_client(tmp_path, mock_llm):
+    from engram_ai.project import ProjectManager
+    pm = ProjectManager(base_path=tmp_path, llm=mock_llm, config={"default_project": "default"})
+    forge = pm.get_forge("default")
+    exp1 = forge.record(
+        action="Used list comprehension",
+        context="Data processing",
+        outcome="Fast and readable",
+        valence=0.9,
+    )
+    forge.record(
+        action="Skipped type hints",
+        context="Utility functions",
+        outcome="Hard to maintain",
+        valence=-0.7,
+    )
+    exp3 = forge.record(
+        action="Added tests first",
+        context="New feature",
+        outcome="Caught bugs early",
+        valence=0.8,
+    )
+    skill = Skill(
+        rule="Prefer list comprehensions for data transforms",
+        context_pattern="Data processing",
+        confidence=0.85,
+        source_experiences=[exp1.id, exp3.id],
+        evidence_count=2,
+        valence_summary={"positive": 2, "negative": 0},
+    )
+    forge._storage.store_skill(skill)
+    app = create_app(project_manager=pm)
     return TestClient(app)
 
 
@@ -118,3 +153,97 @@ def test_crystallize_returns_list(seeded_client):
 def test_evolve_returns_record_or_null(seeded_client):
     r = seeded_client.post("/api/evolve", json={"config_path": "./test_CLAUDE.md"})
     assert r.status_code == 200
+
+
+def test_status_with_project_param(tmp_path, mock_llm):
+    from engram_ai.project import ProjectManager
+    pm = ProjectManager(base_path=tmp_path, llm=mock_llm, config={"default_project": "default"})
+    app = create_app(project_manager=pm)
+    client = TestClient(app)
+    r = client.get("/api/status?project=testproj")
+    assert r.status_code == 200
+    assert r.json()["total_experiences"] == 0
+
+
+def test_scheduler_status(tmp_path, mock_llm):
+    from engram_ai.project import ProjectManager
+    pm = ProjectManager(base_path=tmp_path, llm=mock_llm, config={"default_project": "default"})
+    app = create_app(project_manager=pm)
+    client = TestClient(app)
+    r = client.get("/api/scheduler/status")
+    assert r.status_code == 200
+    assert "enabled" in r.json()
+
+
+def test_projects_list(tmp_path, mock_llm):
+    from engram_ai.project import ProjectManager
+    pm = ProjectManager(base_path=tmp_path, llm=mock_llm, config={"default_project": "default"})
+    pm.get_forge("alpha")
+    pm.get_forge("beta")
+    app = create_app(project_manager=pm)
+    client = TestClient(app)
+    r = client.get("/api/projects")
+    assert r.status_code == 200
+    assert "alpha" in r.json()
+    assert "beta" in r.json()
+
+
+def test_graph_includes_chain_edges(tmp_path, mock_llm):
+    from engram_ai.project import ProjectManager
+    pm = ProjectManager(base_path=tmp_path, llm=mock_llm, config={"default_project": "default"})
+    forge = pm.get_forge("default")
+    exp1 = forge.record(action="first", context="ctx", outcome="ok", valence=0.5)
+    forge.record(action="second", context="ctx", outcome="ok", valence=0.5, parent_id=exp1.id)
+    app = create_app(project_manager=pm)
+    client = TestClient(app)
+    data = client.get("/api/graph").json()
+    edge_types = {e["type"] for e in data["edges"]}
+    assert "chain" in edge_types
+
+
+def test_graph_includes_conflict_edges(tmp_path, mock_llm):
+    from engram_ai.project import ProjectManager
+    from engram_ai.models.skill import Skill
+    pm = ProjectManager(base_path=tmp_path, llm=mock_llm, config={"default_project": "default"})
+    forge = pm.get_forge("default")
+    s1 = Skill(
+        rule="Use ORM", context_pattern="DB", confidence=0.8,
+        source_experiences=["e1"], evidence_count=1,
+        valence_summary={"positive": 3, "negative": 0},
+        conflicts_with=["will-set-below"],
+    )
+    s2 = Skill(
+        rule="Use raw SQL", context_pattern="DB", confidence=0.7,
+        source_experiences=["e2"], evidence_count=1,
+        valence_summary={"positive": 2, "negative": 0},
+    )
+    s1.conflicts_with = [s2.id]
+    s2.conflicts_with = [s1.id]
+    forge._storage.store_skill(s1)
+    forge._storage.store_skill(s2)
+    app = create_app(project_manager=pm)
+    client = TestClient(app)
+    data = client.get("/api/graph").json()
+    edge_types = {e["type"] for e in data["edges"]}
+    assert "conflict" in edge_types
+
+
+def test_graph_nodes_include_v02_fields(tmp_path, mock_llm):
+    from engram_ai.project import ProjectManager
+    from engram_ai.models.skill import Skill
+    pm = ProjectManager(base_path=tmp_path, llm=mock_llm, config={"default_project": "default"})
+    forge = pm.get_forge("default")
+    skill = Skill(
+        rule="test", context_pattern="ctx", confidence=0.5,
+        source_experiences=["e1"], evidence_count=1,
+        valence_summary={"positive": 1, "negative": 0},
+        skill_type="anti", status="active",
+    )
+    forge._storage.store_skill(skill)
+    app = create_app(project_manager=pm)
+    client = TestClient(app)
+    data = client.get("/api/graph").json()
+    skill_nodes = [n for n in data["nodes"] if n["type"] == "skill"]
+    assert len(skill_nodes) >= 1
+    assert "skill_type" in skill_nodes[0]
+    assert "status" in skill_nodes[0]

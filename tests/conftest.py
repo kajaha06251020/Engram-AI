@@ -9,6 +9,7 @@ class MockLLM:
         self._evolve_response = ""
         self._verify_conflict_response = True
         self._merge_skills_response = None
+        self._extract_experience_response = None
 
     def set_valence_response(self, valence: float):
         self._valence_response = valence
@@ -52,6 +53,12 @@ class MockLLM:
             evidence_count=skill_a.evidence_count + skill_b.evidence_count,
             valence_summary=skill_a.valence_summary,
         )
+
+    def set_extract_experience_response(self, response: dict | None):
+        self._extract_experience_response = response
+
+    def extract_experience(self, messages: list[dict]) -> dict | None:
+        return self._extract_experience_response
 
 @pytest.fixture
 def mock_llm():

@@ -53,3 +53,21 @@ def test_evolve_with_adapter(tmp_path, monkeypatch):
     runner = CliRunner()
     result = runner.invoke(main, ["evolve", "--adapter", "cursor"])
     assert result.exit_code == 0
+
+
+def test_projects_list_empty(tmp_path, monkeypatch):
+    monkeypatch.setenv("ENGRAM_AI_STORAGE", str(tmp_path))
+    runner = CliRunner()
+    result = runner.invoke(main, ["projects", "list"])
+    assert result.exit_code == 0
+
+
+def test_projects_list_with_data(tmp_path, monkeypatch):
+    monkeypatch.setenv("ENGRAM_AI_STORAGE", str(tmp_path))
+    (tmp_path / "alpha").mkdir()
+    (tmp_path / "beta").mkdir()
+    runner = CliRunner()
+    result = runner.invoke(main, ["projects", "list"])
+    assert result.exit_code == 0
+    assert "alpha" in result.output
+    assert "beta" in result.output

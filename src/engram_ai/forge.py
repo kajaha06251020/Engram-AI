@@ -26,6 +26,22 @@ logger = logging.getLogger(__name__)
 DEFAULT_DATA_PATH = Path.home() / ".engram-ai" / "data"
 
 
+def _trim_messages(messages: list[dict], max_turns: int = 3) -> list[dict]:
+    """Trim messages to the last max_turns turn pairs.
+
+    Strips empty content and non-user/assistant roles, then takes
+    the last max_turns*2 messages.
+    """
+    filtered = [
+        m for m in messages
+        if m.get("role") in ("user", "assistant") and m.get("content", "").strip()
+    ]
+    limit = max_turns * 2
+    if len(filtered) <= limit:
+        return filtered
+    return filtered[-limit:]
+
+
 class Forge:
     """Main entry point for Engram-AI. Experience-driven memory for AI agents."""
 
@@ -46,7 +62,7 @@ class Forge:
         self._llm = llm or ClaudeLLM(api_key=anthropic_api_key)
         self._adapter = adapter or ClaudeCodeAdapter()
 
-        pending_path = str(Path(storage_dir).parent / "pending.jsonl")
+        pending_path = str(Path(storage_dir) / "pending.jsonl")
         self._recorder = Recorder(
             storage=self._storage, event_bus=self._event_bus,
             pending_path=pending_path, llm=self._llm,
@@ -127,5 +143,43 @@ class Forge:
     def detect_valence(self, message: str) -> float:
         return self._recorder.detect_valence(message)
 
+    def observe(self, messages: list[dict], max_turns: int = 3,
+                crystallize_threshold: int = 5) -> dict:
+        """Observe a conversation snippet and auto-record/crystallize."""
+        if crystallize_threshold < 2:
+            raise EngramError("crystallize_threshold must be >= 2")
+
+        trimmed = _trim_messages(messages, max_turns)
+        if not trimmed:
+            return {"recorded": None, "crystallized": []}
+
+        try:
+            extracted = self._llm.extract_experience(trimmed)
+        except NotImplementedError:
+            raise EngramError(
+                "observe requires an LLM that supports extract_experience"
+            )
+
+        if extracted is None:
+            return {"recorded": None, "crystallized": []}
+
+        exp = self.record(
+            action=extracted["action"],
+            context=extracted["context"],
+            outcome=extracted["outcome"],
+            valence=extracted["valence"],
+        )
+
+        crystallized = []
+        count = len(self._storage.get_all_experiences())
+        if count >= crystallize_threshold and count % crystallize_threshold == 0:
+            crystallized = self.crystallize()
+
+        return {"recorded": exp, "crystallized": crystallized}
+
     def on(self, event_name: str, callback: Callable) -> None:
         self._event_bus.on(event_name, callback)
+
+    def close(self) -> None:
+        """Release storage resources (e.g. SQLite file handles)."""
+        self._storage.close()

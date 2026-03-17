@@ -1,6 +1,6 @@
 [project]
 name = "engram-ai"
-version = "0.2.0"
+version = "0.3.0"
 description = "Experience-driven memory infrastructure for AI agents"
 license = "Apache-2.0"
 requires-python = ">=3.10"
@@ -39,6 +39,7 @@ packages = ["src/engram_ai"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 
 [tool.ruff]
 target-version = "py310"

@@ -39,6 +39,9 @@ class IntegrationMockLLM:
         lines = [f"- {s.rule} (confidence: {s.confidence})" for s in skills]
         return "\n".join(lines)
 
+    def extract_experience(self, messages):
+        return None  # Conservative default
+
 
 @pytest.fixture
 def forge(tmp_path):
@@ -205,3 +208,89 @@ def test_v02_reinforcement_decay_conflict_flow(tmp_path):
     status = forge.status()
     assert status["total_experiences"] == 10
     assert status["total_skills"] >= 1
+
+
+def test_observe_full_flow(tmp_path):
+    """End-to-end: observe -> auto-record -> auto-crystallize."""
+    from engram_ai.forge import Forge
+    from engram_ai.models.skill import Skill
+    from tests.conftest import MockLLM
+
+    llm = MockLLM()
+    forge = Forge(storage_path=str(tmp_path / "data"), llm=llm)
+
+    # Pre-fill experiences to reach threshold - 1
+    for i in range(4):
+        forge.record(action=f"action{i}", context="similar context",
+                     outcome=f"outcome{i}", valence=0.7)
+
+    # Set up MockLLM for observe + crystallize
+    llm.set_extract_experience_response({
+        "action": "optimized query",
+        "context": "similar context",
+        "outcome": "faster response",
+        "valence": 0.9,
+    })
+    # Provide multiple copies to handle potential multi-cluster scenarios
+    optimize_skill = Skill(
+        rule="Optimize DB queries for list endpoints",
+        context_pattern="API performance",
+        confidence=0.85, source_experiences=[], evidence_count=5,
+        valence_summary={"positive": 5, "negative": 0},
+    )
+    llm.set_crystallize_response([optimize_skill] * 3)
+
+    result = forge.observe(
+        messages=[
+            {"role": "user", "content": "The list endpoint is slow"},
+            {"role": "assistant", "content": "I optimized the query with eager loading"},
+            {"role": "user", "content": "Perfect, much faster now"},
+            {"role": "assistant", "content": "Glad it worked!"},
+        ],
+        max_turns=2,
+        crystallize_threshold=5,
+    )
+
+    assert result["recorded"] is not None
+    assert result["recorded"].action == "optimized query"
+    assert len(result["crystallized"]) >= 1
+    assert "Optimize DB queries" in result["crystallized"][0].rule
+
+
+def test_observe_full_flow_no_crystallize_below_threshold(tmp_path):
+    """observe does NOT crystallize when below threshold."""
+    from engram_ai.forge import Forge
+    from tests.conftest import MockLLM
+
+    llm = MockLLM()
+    forge = Forge(storage_path=str(tmp_path / "data"), llm=llm)
+
+    llm.set_extract_experience_response({
+        "action": "small fix", "context": "minor issue",
+        "outcome": "resolved", "valence": 0.5,
+    })
+    result = forge.observe(
+        messages=[{"role": "user", "content": "x"}, {"role": "assistant", "content": "y"}],
+        crystallize_threshold=5,
+    )
+    assert result["recorded"] is not None
+    assert result["crystallized"] == []
+
+
+@pytest.fixture
+def mock_llm():
+    return IntegrationMockLLM()
+
+
+def test_v03_multi_project_isolation(tmp_path, mock_llm):
+    """Projects have isolated data."""
+    from engram_ai.project import ProjectManager
+    pm = ProjectManager(base_path=tmp_path, llm=mock_llm, config={"default_project": "default"})
+    forge_a = pm.get_forge("project_a")
+    forge_b = pm.get_forge("project_b")
+    forge_a.record(action="action_a", context="ctx_a", outcome="ok", valence=0.5)
+    forge_b.record(action="action_b", context="ctx_b", outcome="ok", valence=0.5)
+    status_a = forge_a.status()
+    status_b = forge_b.status()
+    assert status_a["total_experiences"] == 1
+    assert status_b["total_experiences"] == 1

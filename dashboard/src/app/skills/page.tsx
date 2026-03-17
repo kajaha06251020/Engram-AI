@@ -159,6 +159,21 @@ export default function SkillsPage() {
                 >
                   {skill.applied ? "Applied" : "Unapplied"}
                 </span>
+                {skill.status === "superseded" && (
+                  <span className="px-2 py-0.5 bg-gray-600/20 text-gray-400 rounded text-xs line-through">
+                    superseded
+                  </span>
+                )}
+                {skill.skill_type === "anti" && (
+                  <span className="px-2 py-0.5 bg-engram-red/20 text-engram-red rounded text-xs">
+                    anti
+                  </span>
+                )}
+                {skill.conflicts_with?.length > 0 && (
+                  <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded text-xs" title={`Conflicts with ${skill.conflicts_with.length} skill(s)`}>
+                    {skill.conflicts_with.length} conflict(s)
+                  </span>
+                )}
               </div>
             </motion.div>
           ))

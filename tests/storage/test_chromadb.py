@@ -133,3 +133,16 @@ def test_get_unapplied_skills_excludes_superseded(tmp_path):
     unapplied = storage.get_unapplied_skills()
     assert len(unapplied) == 1
     assert unapplied[0].id == active.id
+
+
+def test_get_all_skills_including_superseded(tmp_path):
+    storage = ChromaDBStorage(persist_path=str(tmp_path / "db"))
+    active = _make_skill(rule="active rule")
+    superseded = _make_skill(rule="old rule", status="superseded")
+    storage.store_skill(active)
+    storage.store_skill(superseded)
+    all_skills = storage.get_all_skills_including_superseded()
+    assert len(all_skills) == 2
+    ids = {s.id for s in all_skills}
+    assert active.id in ids
+    assert superseded.id in ids

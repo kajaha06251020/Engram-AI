@@ -6,13 +6,24 @@ from engram_ai.mcp import create_mcp_server
 from tests.conftest import MockLLM
 
 
+class _SingleForgeProjectManager:
+    """Minimal project-manager shim for unit tests."""
+
+    def __init__(self, forge: Forge):
+        self._forge = forge
+
+    def get_forge(self, project=None) -> Forge:
+        return self._forge
+
+
 @pytest.fixture
 def forge_and_server(tmp_path):
     forge = Forge(
         storage_path=str(tmp_path / "data"),
         llm=MockLLM(),
     )
-    server = create_mcp_server(forge)
+    pm = _SingleForgeProjectManager(forge)
+    server = create_mcp_server(pm)
     return forge, server
 
 
@@ -87,3 +98,49 @@ async def test_list_tools_includes_v02(forge_and_server):
     assert "engram_conflicts" in tool_names
     assert "engram_merge" in tool_names
     assert "engram_decay" in tool_names
+
+
+@pytest.mark.asyncio
+async def test_list_tools_includes_observe(forge_and_server):
+    _, server = forge_and_server
+    tools = await _list_tools(server)
+    tool_names = [t.name for t in tools]
+    assert "engram_observe" in tool_names
+
+
+@pytest.mark.asyncio
+async def test_engram_observe_no_experience(forge_and_server):
+    forge, server = forge_and_server
+    result = await _call_tool(server, "engram_observe", {
+        "messages": [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"},
+        ],
+    })
+    assert "No notable experience" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_engram_observe_records(forge_and_server):
+    forge, server = forge_and_server
+    forge._llm.set_extract_experience_response({
+        "action": "Fixed auth bug",
+        "context": "Login was broken",
+        "outcome": "Login works now",
+        "valence": 0.9,
+    })
+    result = await _call_tool(server, "engram_observe", {
+        "messages": [
+            {"role": "user", "content": "Login is broken"},
+            {"role": "assistant", "content": "Fixed the auth middleware"},
+        ],
+    })
+    assert "Recorded" in result[0].text
+    assert "Fixed auth bug" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_engram_observe_empty_messages(forge_and_server):
+    _, server = forge_and_server
+    result = await _call_tool(server, "engram_observe", {"messages": []})
+    assert "No notable experience" in result[0].text

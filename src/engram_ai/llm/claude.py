@@ -104,3 +104,35 @@ class ClaudeLLM(BaseLLM):
             evidence_count=skill_a.evidence_count + skill_b.evidence_count,
             valence_summary={"positive": pos, "negative": neg},
         )
+
+    def extract_experience(self, messages: list[dict]) -> dict | None:
+        system = (
+            "You analyze conversations between a user and an AI assistant to extract "
+            "notable experiences worth recording for future learning.\n\n"
+            "Look for: technical learnings, failure lessons, success patterns, "
+            "debugging insights, or important caveats.\n"
+            "Skip: casual chat, greetings, pure questions without resolution, "
+            "trivial exchanges.\n\n"
+            "If the conversation contains a recordable experience, respond with ONLY "
+            "a JSON object:\n"
+            '{"action": "<what was done>", "context": "<situation/problem>", '
+            '"outcome": "<what happened/result>", "valence": <float from -1.0 to 1.0>}\n\n'
+            "If there is no notable experience, respond with ONLY:\n"
+            '{"experience": null}'
+        )
+        transcript = "\n".join(
+            f"[{m['role']}]: {m['content']}" for m in messages
+        )
+        result = self._call(system, transcript)
+        try:
+            parsed = json.loads(result)
+            if parsed.get("experience") is None and "action" not in parsed:
+                return None
+            required = ("action", "context", "outcome", "valence")
+            if not all(k in parsed for k in required):
+                return None
+            parsed["valence"] = max(-1.0, min(1.0, float(parsed["valence"])))
+            return {k: parsed[k] for k in required}
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+            logger.warning("Failed to parse extract_experience response: %s", e)
+            return None
