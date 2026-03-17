@@ -257,6 +257,47 @@ class Forge:
         self._event_bus.emit(SKILL_CRYSTALLIZED, skill)
         return skill
 
+    def recall(self, context: str, k_skills: int = 3, k_experiences: int = 2) -> dict:
+        """Search for relevant skills and negative experiences for a given context."""
+        if not context.strip() or (k_skills == 0 and k_experiences == 0):
+            return {"skills": [], "warnings": []}
+
+        skills = []
+        if k_skills > 0:
+            try:
+                results = self._storage.query_skills(context, k=k_skills)
+                skills = [s for s, sim in results if sim >= 0.4][:k_skills]
+            except Exception:
+                pass
+
+        warnings = []
+        if k_experiences > 0:
+            try:
+                results = self._storage.query_experiences(context, k=k_experiences * 3)
+                warnings = [
+                    exp for exp, sim in results
+                    if exp.valence < -0.3 and sim >= 0.4
+                ][:k_experiences]
+            except Exception:
+                pass
+
+        return {"skills": skills, "warnings": warnings}
+
+    def warn(self, action: str, context: str, threshold: float = 0.6) -> list:
+        """Search for past negative experiences similar to the current action."""
+        search_text = f"{action} {context}"
+        try:
+            results = self._storage.query_experiences(search_text, k=10)
+        except Exception:
+            return []
+
+        warnings = [
+            (exp, sim) for exp, sim in results
+            if exp.valence < -0.3 and sim >= threshold
+        ]
+        warnings.sort(key=lambda pair: pair[1], reverse=True)
+        return [exp for exp, sim in warnings]
+
     def on(self, event_name: str, callback: Callable) -> None:
         self._event_bus.on(event_name, callback)
 

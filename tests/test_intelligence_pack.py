@@ -181,3 +181,74 @@ def test_teach_reinforces_similar(tmp_path, mock_llm):
     )
     all_skills = forge._storage.get_all_skills()
     assert len(all_skills) >= 1
+
+
+# Task 5: recall()
+
+
+def test_recall_returns_skills(tmp_path, mock_llm):
+    forge = Forge(storage_path=str(tmp_path / "data"), llm=mock_llm)
+    forge.teach(rule="Use eager loading", context_pattern="database queries")
+    result = forge.recall("database queries optimization")
+    assert "skills" in result
+    assert "warnings" in result
+    assert isinstance(result["skills"], list)
+    assert isinstance(result["warnings"], list)
+
+
+def test_recall_returns_warnings(tmp_path, mock_llm):
+    forge = Forge(storage_path=str(tmp_path / "data"), llm=mock_llm)
+    forge.record(
+        action="Changed auth middleware",
+        context="authentication system",
+        outcome="Production outage",
+        valence=-0.8,
+    )
+    result = forge.recall("authentication system changes")
+    assert "warnings" in result
+
+
+def test_recall_empty_context(tmp_path, mock_llm):
+    forge = Forge(storage_path=str(tmp_path / "data"), llm=mock_llm)
+    result = forge.recall("")
+    assert result == {"skills": [], "warnings": []}
+
+
+def test_recall_zero_k(tmp_path, mock_llm):
+    forge = Forge(storage_path=str(tmp_path / "data"), llm=mock_llm)
+    result = forge.recall("test", k_skills=0, k_experiences=0)
+    assert result == {"skills": [], "warnings": []}
+
+
+# Task 6: warn()
+
+
+def test_warn_returns_negative_experiences(tmp_path, mock_llm):
+    forge = Forge(storage_path=str(tmp_path / "data"), llm=mock_llm)
+    forge.record(
+        action="Edit auth.py",
+        context="auth.py session handling",
+        outcome="CSRF vulnerability",
+        valence=-0.9,
+    )
+    warnings = forge.warn(action="Edit auth.py", context="auth.py session handling")
+    assert isinstance(warnings, list)
+
+
+def test_warn_ignores_positive_experiences(tmp_path, mock_llm):
+    forge = Forge(storage_path=str(tmp_path / "data"), llm=mock_llm)
+    forge.record(
+        action="Edit auth.py",
+        context="auth.py refactor",
+        outcome="Clean code",
+        valence=0.9,
+    )
+    warnings = forge.warn(action="Edit auth.py", context="auth.py refactor")
+    for exp in warnings:
+        assert exp.valence < -0.3
+
+
+def test_warn_empty_returns_empty(tmp_path, mock_llm):
+    forge = Forge(storage_path=str(tmp_path / "data"), llm=mock_llm)
+    warnings = forge.warn(action="test", context="nothing here")
+    assert warnings == []
