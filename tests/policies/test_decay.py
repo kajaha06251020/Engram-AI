@@ -1,10 +1,9 @@
-import math
 from datetime import datetime, timedelta
 from engram_ai.events.bus import EventBus
 from engram_ai.events.events import EXPERIENCE_RECORDED, SKILL_DECAYED
 from engram_ai.models.experience import Experience
 from engram_ai.models.skill import Skill
-from engram_ai.policies.decay import DecayConfig, DecayPolicy
+from engram_ai.policies.decay import DecayPolicy
 
 
 def _make_skill(confidence=0.8, created_days_ago=0, last_reinforced_days_ago=None, **kw):

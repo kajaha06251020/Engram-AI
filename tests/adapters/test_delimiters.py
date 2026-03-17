@@ -1,4 +1,3 @@
-from pathlib import Path
 from engram_ai.adapters._delimiters import write_delimited_section, write_comment_delimited_section
 
 
