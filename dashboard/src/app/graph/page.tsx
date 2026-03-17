@@ -49,12 +49,17 @@ export default function GraphPage() {
     (link: any) => {
       const srcId = typeof link.source === "object" ? link.source.id : link.source;
       const tgtId = typeof link.target === "object" ? link.target.id : link.target;
-      if (highlightNodes.size > 0 && (highlightNodes.has(srcId) || highlightNodes.has(tgtId))) {
-        return link.type === "source" ? "rgba(129,140,248,0.7)" : "rgba(148,163,184,0.5)";
+      const isHighlighted = highlightNodes.size > 0 && (highlightNodes.has(srcId) || highlightNodes.has(tgtId));
+      const boost = isHighlighted ? 0.4 : 0;
+
+      switch (link.type) {
+        case "source": return `rgba(129,140,248,${0.3 + boost})`;
+        case "similarity": return `rgba(148,163,184,${0.15 + boost})`;
+        case "chain": return `rgba(59,130,246,${0.6 + boost})`;
+        case "related": return `rgba(148,163,184,${0.15 + boost})`;
+        case "conflict": return `rgba(239,68,68,${0.6 + boost})`;
+        default: return `rgba(148,163,184,${0.15 + boost})`;
       }
-      return link.type === "source"
-        ? "rgba(129,140,248,0.3)"
-        : "rgba(148,163,184,0.15)";
     },
     [highlightNodes]
   );
@@ -103,6 +108,11 @@ export default function GraphPage() {
         nodeLabel={nodeLabel}
         linkColor={linkColor}
         linkWidth={(link: any) => (link.type === "source" ? 1.5 : 0.5)}
+        linkLineDash={(link: any) =>
+          link.type === "chain" || link.type === "conflict" ? [5, 5] : []
+        }
+        linkDirectionalArrowLength={(link: any) => link.type === "chain" ? 6 : 0}
+        linkDirectionalArrowRelPos={1}
         backgroundColor="#0f0f23"
         onNodeClick={handleNodeClick}
         onBackgroundClick={() => setHighlightNodes(new Set())}
@@ -112,19 +122,34 @@ export default function GraphPage() {
 
           if (node.type === "skill") {
             const r = 4 + (node.confidence ?? 0.5) * 4;
+            // Superseded skills are semi-transparent
+            const baseAlpha = node.status === "superseded" ? 0.3 : alpha;
             drawHexagon(ctx, node.x!, node.y!, r);
-            ctx.fillStyle = `rgba(251,191,36,${alpha})`;
+            // Color by confidence
+            const conf = node.confidence ?? 0.5;
+            const green = Math.round(conf * 200);
+            const red = Math.round((1 - conf) * 200);
+            ctx.fillStyle = `rgba(${red},${green},100,${baseAlpha})`;
             ctx.fill();
-            ctx.strokeStyle = `rgba(251,191,36,${Math.min(alpha + 0.2, 1)})`;
-            ctx.lineWidth = 0.5;
+            // Anti-skills get red border
+            ctx.strokeStyle = node.skill_type === "anti"
+              ? `rgba(239,68,68,${baseAlpha})`
+              : `rgba(251,191,36,${Math.min(baseAlpha + 0.2, 1)})`;
+            ctx.lineWidth = node.skill_type === "anti" ? 2 : 0.5;
             ctx.stroke();
           } else {
+            // Experience circle — add chain indicator
             const r = 2 + Math.abs(node.valence ?? 0) * 4;
             ctx.beginPath();
             ctx.arc(node.x!, node.y!, r, 0, 2 * Math.PI);
             const color = (node.valence ?? 0) >= 0 ? "52,211,153" : "248,113,113";
             ctx.fillStyle = `rgba(${color},${alpha})`;
             ctx.fill();
+            if (node.parent_id) {
+              ctx.strokeStyle = `rgba(59,130,246,${alpha})`;
+              ctx.lineWidth = 2;
+              ctx.stroke();
+            }
           }
         }}
         nodePointerAreaPaint={(node: any, color: string, ctx: CanvasRenderingContext2D) => {
