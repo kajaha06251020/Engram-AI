@@ -39,5 +39,8 @@ class BaseStorage(ABC):
     def get_experience(self, experience_id: str) -> Experience | None:
         """Fetch a single experience by ID."""
 
+    def get_all_skills_including_superseded(self) -> list["Skill"]:
+        raise NotImplementedError
+
     def close(self) -> None:
         """Release any held resources (e.g. file handles). No-op by default."""

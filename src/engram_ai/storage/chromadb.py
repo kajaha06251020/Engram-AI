@@ -75,6 +75,10 @@ class ChromaDBStorage(BaseStorage):
         results = self._skills.get(where={"status": "active"})
         return [Skill.model_validate_json(meta["data"]) for meta in results["metadatas"]]
 
+    def get_all_skills_including_superseded(self) -> list[Skill]:
+        results = self._skills.get()
+        return [Skill.model_validate_json(meta["data"]) for meta in results["metadatas"]]
+
     def get_unapplied_skills(self) -> list[Skill]:
         results = self._skills.get(where={"$and": [{"applied": "false"}, {"status": "active"}]})
         return [Skill.model_validate_json(meta["data"]) for meta in results["metadatas"]]
