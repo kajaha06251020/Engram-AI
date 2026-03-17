@@ -275,3 +275,22 @@ def test_observe_full_flow_no_crystallize_below_threshold(tmp_path):
     )
     assert result["recorded"] is not None
     assert result["crystallized"] == []
+
+
+@pytest.fixture
+def mock_llm():
+    return IntegrationMockLLM()
+
+
+def test_v03_multi_project_isolation(tmp_path, mock_llm):
+    """Projects have isolated data."""
+    from engram_ai.project import ProjectManager
+    pm = ProjectManager(base_path=tmp_path, llm=mock_llm, config={"default_project": "default"})
+    forge_a = pm.get_forge("project_a")
+    forge_b = pm.get_forge("project_b")
+    forge_a.record(action="action_a", context="ctx_a", outcome="ok", valence=0.5)
+    forge_b.record(action="action_b", context="ctx_b", outcome="ok", valence=0.5)
+    status_a = forge_a.status()
+    status_b = forge_b.status()
+    assert status_a["total_experiences"] == 1
+    assert status_b["total_experiences"] == 1

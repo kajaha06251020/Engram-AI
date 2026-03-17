@@ -20,8 +20,9 @@ from engram_ai.forge import Forge
 router = APIRouter(prefix="/api")
 
 
-def get_forge(request: Request) -> Forge:
-    return request.app.state.forge
+def get_forge(request: Request) -> "Forge":
+    project = request.query_params.get("project")
+    return request.app.state.project_manager.get_forge(project)
 
 
 # --- Request schemas ---
@@ -80,58 +81,99 @@ async def get_skills(forge: Forge = Depends(get_forge)) -> list[dict]:
 
 @router.get("/graph")
 async def get_graph(forge: Forge = Depends(get_forge)) -> dict:
-    storage = forge._storage
-    experiences = storage.get_all_experiences()
-    skills = storage.get_all_skills()
+    experiences = forge._storage.get_all_experiences()
+    all_skills = forge._storage.get_all_skills_including_superseded()
 
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
+    exp_ids = set()
+    skill_ids = set()
 
     for exp in experiences:
-        nodes.append(
-            {
-                "id": exp.id,
-                "type": "experience",
-                "label": exp.action[:80],
-                "valence": exp.valence,
-                "timestamp": exp.timestamp.isoformat(),
-            }
-        )
+        exp_ids.add(exp.id)
+        nodes.append({
+            "id": exp.id, "type": "experience",
+            "label": exp.action[:80],
+            "valence": exp.valence,
+            "timestamp": exp.timestamp.isoformat(),
+            "parent_id": exp.parent_id,
+            "related_ids": exp.related_ids,
+        })
 
-    for skill in skills:
-        nodes.append(
-            {
-                "id": skill.id,
-                "type": "skill",
-                "label": skill.rule[:80],
-                "confidence": skill.confidence,
-            }
-        )
+    for skill in all_skills:
+        skill_ids.add(skill.id)
+        nodes.append({
+            "id": skill.id, "type": "skill",
+            "label": skill.rule[:80],
+            "confidence": skill.confidence,
+            "skill_type": skill.skill_type,
+            "status": skill.status,
+            "conflicts_with": skill.conflicts_with,
+        })
+        for src_id in skill.source_experiences:
+            if src_id in exp_ids:
+                edges.append({"source": src_id, "target": skill.id, "type": "source"})
 
-    for skill in skills:
-        for exp_id in skill.source_experiences:
-            edges.append({"source": exp_id, "target": skill.id, "type": "source"})
-
-    seen_pairs: set[tuple[str, str]] = set()
+    # Chain edges
     for exp in experiences:
-        similar = storage.query_experiences(exp.action, k=5)
-        for other_exp, score in similar:
-            if other_exp.id == exp.id or score <= 0.3:
-                continue
-            pair = tuple(sorted([exp.id, other_exp.id]))
-            if pair in seen_pairs:
-                continue
-            seen_pairs.add(pair)
-            edges.append(
-                {
-                    "source": exp.id,
-                    "target": other_exp.id,
-                    "type": "similarity",
-                    "weight": round(score, 3),
-                }
-            )
+        if exp.parent_id and exp.parent_id in exp_ids:
+            edges.append({"source": exp.parent_id, "target": exp.id, "type": "chain"})
+
+    # Related edges
+    for exp in experiences:
+        for related_id in exp.related_ids:
+            if related_id in exp_ids and related_id != exp.id:
+                edges.append({"source": exp.id, "target": related_id, "type": "related"})
+
+    # Conflict edges (deduplicate)
+    seen_conflicts: set[tuple[str, str]] = set()
+    for skill in all_skills:
+        for conflict_id in skill.conflicts_with:
+            pair = tuple(sorted([skill.id, conflict_id]))
+            if pair not in seen_conflicts and conflict_id in skill_ids:
+                seen_conflicts.add(pair)
+                edges.append({"source": skill.id, "target": conflict_id, "type": "conflict"})
+
+    # Similarity edges
+    seen_sim_pairs: set[tuple[str, str]] = set()
+    for exp in experiences:
+        similar = forge._storage.query_experiences(exp.context, k=3)
+        for sim_exp, score in similar:
+            if sim_exp.id != exp.id and score > 0.5:
+                pair = tuple(sorted([exp.id, sim_exp.id]))
+                if pair not in seen_sim_pairs:
+                    seen_sim_pairs.add(pair)
+                    edges.append({
+                        "source": exp.id, "target": sim_exp.id,
+                        "type": "similarity", "weight": round(score, 2),
+                    })
 
     return {"nodes": nodes, "edges": edges}
+
+
+@router.get("/projects")
+async def list_projects(request: Request) -> list[str]:
+    return request.app.state.project_manager.list_projects()
+
+
+@router.get("/scheduler/status")
+async def scheduler_status(request: Request) -> dict:
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if scheduler is None:
+        return {"enabled": False, "running": False}
+    return scheduler.get_status()
+
+
+@router.post("/scheduler/toggle")
+async def scheduler_toggle(request: Request) -> dict:
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if scheduler is None:
+        return {"enabled": False, "running": False}
+    if scheduler.is_running:
+        await scheduler.stop()
+    else:
+        await scheduler.start()
+    return scheduler.get_status()
 
 
 # --- POST endpoints ---
@@ -163,7 +205,8 @@ ws_router = APIRouter()
 @ws_router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    forge: Forge = websocket.app.state.forge
+    project = websocket.query_params.get("project")
+    forge: Forge = websocket.app.state.project_manager.get_forge(project)
     queue: asyncio.Queue = asyncio.Queue()
     loop = asyncio.get_running_loop()
 

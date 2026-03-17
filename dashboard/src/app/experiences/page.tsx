@@ -208,6 +208,22 @@ export default function ExperiencesPage() {
                               {JSON.stringify(exp.metadata)}
                             </span>
                           </div>
+                          {exp.parent_id && (
+                            <div className="col-span-2">
+                              <strong className="text-gray-400">Parent:</strong>{" "}
+                              <span className="text-blue-400 font-mono text-xs">
+                                {exp.parent_id.slice(0, 8)}...
+                              </span>
+                            </div>
+                          )}
+                          {exp.related_ids?.length > 0 && (
+                            <div className="col-span-2">
+                              <strong className="text-gray-400">Related:</strong>{" "}
+                              <span className="text-gray-300">
+                                {exp.related_ids.length} related experience(s)
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </td>
                     </tr>
