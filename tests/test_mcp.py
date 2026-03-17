@@ -6,13 +6,24 @@ from engram_ai.mcp import create_mcp_server
 from tests.conftest import MockLLM
 
 
+class _SingleForgeProjectManager:
+    """Minimal project-manager shim for unit tests."""
+
+    def __init__(self, forge: Forge):
+        self._forge = forge
+
+    def get_forge(self, project=None) -> Forge:
+        return self._forge
+
+
 @pytest.fixture
 def forge_and_server(tmp_path):
     forge = Forge(
         storage_path=str(tmp_path / "data"),
         llm=MockLLM(),
     )
-    server = create_mcp_server(forge)
+    pm = _SingleForgeProjectManager(forge)
+    server = create_mcp_server(pm)
     return forge, server
 
 

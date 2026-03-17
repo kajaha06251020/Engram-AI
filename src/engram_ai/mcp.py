@@ -4,12 +4,10 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
-from engram_ai.forge import Forge
-
 logger = logging.getLogger(__name__)
 
 
-def create_mcp_server(forge: Forge) -> Server:
+def create_mcp_server(project_manager) -> Server:
     """Create an MCP server exposing Engram-AI tools."""
     server = Server("engram-ai")
 
@@ -31,6 +29,7 @@ def create_mcp_server(forge: Forge) -> Server:
                             "minimum": -1.0,
                             "maximum": 1.0,
                         },
+                        "project": {"type": "string", "description": "Project name (default: from config)", "default": "default"},
                     },
                     "required": ["action", "context", "outcome", "valence"],
                 },
@@ -43,6 +42,7 @@ def create_mcp_server(forge: Forge) -> Server:
                     "properties": {
                         "context": {"type": "string", "description": "Current situation"},
                         "k": {"type": "integer", "description": "Number of results", "default": 5},
+                        "project": {"type": "string", "description": "Project name (default: from config)", "default": "default"},
                     },
                     "required": ["context"],
                 },
@@ -55,6 +55,7 @@ def create_mcp_server(forge: Forge) -> Server:
                     "properties": {
                         "min_experiences": {"type": "integer", "default": 3},
                         "min_confidence": {"type": "number", "default": 0.7},
+                        "project": {"type": "string", "description": "Project name (default: from config)", "default": "default"},
                     },
                 },
             ),
@@ -69,18 +70,29 @@ def create_mcp_server(forge: Forge) -> Server:
                             "description": "Path to config file",
                             "default": "./CLAUDE.md",
                         },
+                        "project": {"type": "string", "description": "Project name (default: from config)", "default": "default"},
                     },
                 },
             ),
             Tool(
                 name="engram_status",
                 description="Show Engram-AI statistics",
-                inputSchema={"type": "object", "properties": {}},
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {"type": "string", "description": "Project name (default: from config)", "default": "default"},
+                    },
+                },
             ),
             Tool(
                 name="engram_conflicts",
                 description="List conflicting skill pairs",
-                inputSchema={"type": "object", "properties": {}},
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {"type": "string", "description": "Project name (default: from config)", "default": "default"},
+                    },
+                },
             ),
             Tool(
                 name="engram_merge",
@@ -90,6 +102,7 @@ def create_mcp_server(forge: Forge) -> Server:
                     "properties": {
                         "skill_a_id": {"type": "string"},
                         "skill_b_id": {"type": "string"},
+                        "project": {"type": "string", "description": "Project name (default: from config)", "default": "default"},
                     },
                     "required": ["skill_a_id", "skill_b_id"],
                 },
@@ -97,7 +110,12 @@ def create_mcp_server(forge: Forge) -> Server:
             Tool(
                 name="engram_decay",
                 description="Apply time-based confidence decay",
-                inputSchema={"type": "object", "properties": {}},
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "project": {"type": "string", "description": "Project name (default: from config)", "default": "default"},
+                    },
+                },
             ),
             Tool(
                 name="engram_observe",
@@ -129,6 +147,7 @@ def create_mcp_server(forge: Forge) -> Server:
                             "default": 5,
                             "minimum": 2,
                         },
+                        "project": {"type": "string", "description": "Project name (default: from config)", "default": "default"},
                     },
                     "required": ["messages"],
                 },
@@ -138,6 +157,8 @@ def create_mcp_server(forge: Forge) -> Server:
     @server.call_tool()
     async def call_tool(name: str, arguments: dict):
         try:
+            project = arguments.pop("project", None)
+            forge = project_manager.get_forge(project)
             if name == "engram_record":
                 exp = forge.record(
                     action=arguments["action"],
@@ -238,23 +259,25 @@ def create_mcp_server(forge: Forge) -> Server:
     return server
 
 
-async def run_mcp_server(forge: Forge | None = None):
+async def run_mcp_server():
     """Run the MCP server on stdio."""
-    if forge is None:
-        import json
-        import os
-        from pathlib import Path
+    import json
+    import os
+    from pathlib import Path
+    from engram_ai.project import ProjectManager
 
-        config_dir = Path.home() / ".engram-ai"
-        config_file = config_dir / "config.json"
-        storage_override = os.environ.get("ENGRAM_AI_STORAGE")
-        if storage_override:
-            forge = Forge(storage_path=storage_override)
-        elif config_file.exists():
-            config = json.loads(config_file.read_text(encoding="utf-8"))
-            forge = Forge(storage_path=config.get("storage_path", str(config_dir / "data")))
-        else:
-            forge = Forge()
-    server = create_mcp_server(forge)
+    config_dir = Path.home() / ".engram-ai"
+    config_file = config_dir / "config.json"
+    config = {}
+    if config_file.exists():
+        config = json.loads(config_file.read_text(encoding="utf-8"))
+    base_path = Path(os.environ.get("ENGRAM_AI_STORAGE", config.get("storage_path", str(config_dir / "data"))))
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    llm = None
+    if api_key:
+        from engram_ai.llm.claude import ClaudeLLM
+        llm = ClaudeLLM(api_key=api_key)
+    pm = ProjectManager(base_path=base_path, llm=llm, config=config)
+    server = create_mcp_server(pm)
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream)
