@@ -103,8 +103,8 @@ class Forge:
                        metadata: dict | None = None, parent_id: str | None = None) -> None:
         self._recorder.record_pending(action, context, metadata, parent_id)
 
-    def complete_pending(self, outcome: str, valence: float) -> None:
-        self._recorder.complete_pending(outcome, valence)
+    def complete_pending(self, outcome: str, valence: float) -> "Experience | None":
+        return self._recorder.complete_pending(outcome, valence)
 
     def query(self, context: str, k: int = 5) -> QueryResult:
         return self._querier.query(context, k=k)
