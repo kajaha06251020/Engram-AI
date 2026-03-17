@@ -15,6 +15,21 @@ class ChromaDBStorage(BaseStorage):
             name="experiences", metadata={"hnsw:space": "cosine"})
         self._skills = self._client.get_or_create_collection(
             name="skills", metadata={"hnsw:space": "cosine"})
+        self._migrate_v1_skills()
+
+    def _migrate_v1_skills(self) -> None:
+        """Idempotent migration: add 'status' to v0.1 skills that lack it.
+        Note: ChromaDB lacks $exists where filters, so we use an O(N) scan.
+        This is acceptable for typical collection sizes and only updates unmigrated records.
+        """
+        all_records = self._skills.get()
+        for i, meta in enumerate(all_records["metadatas"]):
+            if "status" not in meta:
+                meta["status"] = "active"
+                self._skills.update(
+                    ids=[all_records["ids"][i]],
+                    metadatas=[meta],
+                )
 
     def store_experience(self, experience: Experience) -> str:
         doc = f"{experience.action} | {experience.context} | {experience.outcome}"
@@ -27,7 +42,11 @@ class ChromaDBStorage(BaseStorage):
         count = self._experiences.count()
         if count == 0:
             return []
-        results = self._experiences.query(query_texts=[context], n_results=min(k, count))
+        try:
+            results = self._experiences.query(query_texts=[context], n_results=min(k, count))
+        except chromadb.errors.InternalError:
+            logger.warning("ChromaDB HNSW index not ready, returning empty results")
+            return []
         output = []
         for i, meta in enumerate(results["metadatas"][0]):
             exp = Experience.model_validate_json(meta["data"])
@@ -44,15 +63,20 @@ class ChromaDBStorage(BaseStorage):
         doc = f"{skill.rule} | {skill.context_pattern}"
         self._skills.add(
             ids=[skill.id], documents=[doc],
-            metadatas=[{"data": skill.model_dump_json(), "confidence": skill.confidence, "applied": "false"}])
+            metadatas=[{
+                "data": skill.model_dump_json(),
+                "confidence": skill.confidence,
+                "applied": "false",
+                "status": skill.status,
+            }])
         return skill.id
 
     def get_all_skills(self) -> list[Skill]:
-        results = self._skills.get()
+        results = self._skills.get(where={"status": "active"})
         return [Skill.model_validate_json(meta["data"]) for meta in results["metadatas"]]
 
     def get_unapplied_skills(self) -> list[Skill]:
-        results = self._skills.get(where={"applied": "false"})
+        results = self._skills.get(where={"$and": [{"applied": "false"}, {"status": "active"}]})
         return [Skill.model_validate_json(meta["data"]) for meta in results["metadatas"]]
 
     def mark_skills_applied(self, skill_ids: list[str]) -> None:
@@ -62,3 +86,44 @@ class ChromaDBStorage(BaseStorage):
                 meta = existing["metadatas"][0]
                 meta["applied"] = "true"
                 self._skills.update(ids=[skill_id], metadatas=[meta])
+
+    def query_skills(self, text: str, k: int = 5) -> list[tuple[Skill, float]]:
+        count = self._skills.count()
+        if count == 0:
+            return []
+        try:
+            results = self._skills.query(
+                query_texts=[text], n_results=min(k, count),
+                where={"status": "active"},
+            )
+        except chromadb.errors.InternalError:
+            logger.warning("ChromaDB HNSW index not ready, returning empty results")
+            return []
+        output = []
+        for i, meta in enumerate(results["metadatas"][0]):
+            skill = Skill.model_validate_json(meta["data"])
+            distance = results["distances"][0][i]
+            similarity = max(0.0, 1.0 - distance)
+            output.append((skill, similarity))
+        return output
+
+    def update_skill(self, skill: Skill) -> None:
+        doc = f"{skill.rule} | {skill.context_pattern}"
+        existing = self._skills.get(ids=[skill.id])
+        applied = existing["metadatas"][0].get("applied", "false") if existing["metadatas"] else "false"
+        self._skills.update(
+            ids=[skill.id],
+            documents=[doc],
+            metadatas=[{
+                "data": skill.model_dump_json(),
+                "confidence": skill.confidence,
+                "applied": applied,
+                "status": skill.status,
+            }],
+        )
+
+    def get_experience(self, experience_id: str) -> Experience | None:
+        results = self._experiences.get(ids=[experience_id])
+        if not results["metadatas"]:
+            return None
+        return Experience.model_validate_json(results["metadatas"][0]["data"])

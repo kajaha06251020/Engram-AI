@@ -77,6 +77,28 @@ def create_mcp_server(forge: Forge) -> Server:
                 description="Show Engram-AI statistics",
                 inputSchema={"type": "object", "properties": {}},
             ),
+            Tool(
+                name="engram_conflicts",
+                description="List conflicting skill pairs",
+                inputSchema={"type": "object", "properties": {}},
+            ),
+            Tool(
+                name="engram_merge",
+                description="Merge two conflicting skills",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "skill_a_id": {"type": "string"},
+                        "skill_b_id": {"type": "string"},
+                    },
+                    "required": ["skill_a_id", "skill_b_id"],
+                },
+            ),
+            Tool(
+                name="engram_decay",
+                description="Apply time-based confidence decay",
+                inputSchema={"type": "object", "properties": {}},
+            ),
         ]
 
     @server.call_tool()
@@ -137,6 +159,25 @@ def create_mcp_server(forge: Forge) -> Server:
                     f"Unapplied skills: {stats['unapplied_skills']}"
                 )
                 return [TextContent(type="text", text=text)]
+
+            elif name == "engram_conflicts":
+                pairs = forge.detect_conflicts()
+                if not pairs:
+                    return [TextContent(type="text", text="No conflicts detected.")]
+                lines = [f"{len(pairs)} conflict(s):"]
+                for a, b in pairs:
+                    lines.append(f"  [{a.id[:8]}] {a.rule} vs [{b.id[:8]}] {b.rule}")
+                return [TextContent(type="text", text="\n".join(lines))]
+
+            elif name == "engram_merge":
+                merged = forge.merge_skills(arguments["skill_a_id"], arguments["skill_b_id"])
+                return [TextContent(type="text", text=f"Merged: {merged.rule} (confidence: {merged.confidence:.2f})")]
+
+            elif name == "engram_decay":
+                updated = forge.apply_decay()
+                if not updated:
+                    return [TextContent(type="text", text="No skills to decay.")]
+                return [TextContent(type="text", text=f"Decayed {len(updated)} skill(s).")]
 
             else:
                 return [TextContent(type="text", text=f"Unknown tool: {name}")]

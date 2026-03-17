@@ -8,6 +8,7 @@ from engram_ai.storage.base import BaseStorage
 
 logger = logging.getLogger(__name__)
 
+
 class Evolver:
     """Evolves agent configuration by writing learned skills."""
     def __init__(self, storage: BaseStorage, event_bus: EventBus, llm: BaseLLM, adapter: BaseAdapter) -> None:
@@ -21,10 +22,23 @@ class Evolver:
         if not unapplied:
             logger.info("No unapplied skills to evolve")
             return None
-        skills_text = self._llm.generate_evolution_text(unapplied)
-        self._adapter.write_skills(config_path, skills_text)
+
+        positive = [s for s in unapplied if s.skill_type == "positive"]
+        anti = [s for s in unapplied if s.skill_type == "anti"]
+
+        if positive:
+            skills_text = self._llm.generate_evolution_text(positive)
+            self._adapter.write_skills(config_path, skills_text)
+        if anti:
+            anti_text = self._llm.generate_evolution_text(anti)
+            self._adapter.write_anti_skills(config_path, anti_text)
+
         skill_ids = [s.id for s in unapplied]
         self._storage.mark_skills_applied(skill_ids)
-        record = EvolutionRecord(skills_applied=skill_ids, config_path=config_path, diff=f"+ {len(unapplied)} skills added")
+        record = EvolutionRecord(
+            skills_applied=skill_ids,
+            config_path=config_path,
+            diff=f"+ {len(positive)} skills, + {len(anti)} anti-skills added",
+        )
         self._event_bus.emit(AGENT_EVOLVED, record)
         return record

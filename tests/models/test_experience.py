@@ -10,7 +10,7 @@ def test_experience_creation_with_required_fields():
     assert exp.outcome == "User requested fix"
     assert exp.valence == -0.8
     assert exp.status == "complete"
-    assert exp.schema_version == 1
+    assert exp.schema_version == 2
     assert exp.id
     assert isinstance(exp.timestamp, datetime)
     assert exp.metadata == {}
@@ -46,3 +46,33 @@ def test_experience_json_roundtrip():
     json_str = exp.model_dump_json()
     restored = Experience.model_validate_json(json_str)
     assert restored.id == exp.id
+
+
+def test_experience_chain_fields_default():
+    from engram_ai.models.experience import Experience
+    exp = Experience(action="a", context="c", outcome="o", valence=0.5)
+    assert exp.parent_id is None
+    assert exp.related_ids == []
+    assert exp.schema_version == 2
+
+
+def test_experience_with_parent_id():
+    from engram_ai.models.experience import Experience
+    exp = Experience(action="a", context="c", outcome="o", valence=0.5, parent_id="abc-123")
+    assert exp.parent_id == "abc-123"
+
+
+def test_experience_with_related_ids():
+    from engram_ai.models.experience import Experience
+    exp = Experience(action="a", context="c", outcome="o", valence=0.5, related_ids=["id1", "id2"])
+    assert exp.related_ids == ["id1", "id2"]
+
+
+def test_v1_experience_deserializes():
+    """v0.1 JSON without new fields deserializes correctly."""
+    from engram_ai.models.experience import Experience
+    v1_json = '{"id":"x","schema_version":1,"action":"a","context":"c","outcome":"o","valence":0.5,"timestamp":"2026-01-01T00:00:00","metadata":{},"status":"complete"}'
+    exp = Experience.model_validate_json(v1_json)
+    assert exp.schema_version == 1
+    assert exp.parent_id is None
+    assert exp.related_ids == []

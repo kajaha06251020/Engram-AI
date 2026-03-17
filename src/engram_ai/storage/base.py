@@ -25,3 +25,16 @@ class BaseStorage(ABC):
 
     @abstractmethod
     def mark_skills_applied(self, skill_ids: list[str]) -> None: ...
+
+    # v0.2
+    @abstractmethod
+    def query_skills(self, text: str, k: int = 5) -> list[tuple[Skill, float]]:
+        """Semantic search over skills."""
+
+    @abstractmethod
+    def update_skill(self, skill: Skill) -> None:
+        """Update skill metadata in-place."""
+
+    @abstractmethod
+    def get_experience(self, experience_id: str) -> Experience | None:
+        """Fetch a single experience by ID."""

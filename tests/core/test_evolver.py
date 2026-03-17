@@ -81,3 +81,39 @@ def test_evolve_idempotent(storage, evolver, mock_llm, tmp_path):
     evolver.evolve(config_path=config_path)
     content = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
     assert content.count("<!-- engram-ai:start -->") == 1
+
+
+def test_evolve_separates_positive_and_anti(tmp_path, mock_llm):
+    from engram_ai.core.evolver import Evolver
+    from engram_ai.events.bus import EventBus
+    from engram_ai.adapters.claude_code import ClaudeCodeAdapter
+    from engram_ai.storage.chromadb import ChromaDBStorage
+
+    storage = ChromaDBStorage(persist_path=str(tmp_path / "db"))
+    bus = EventBus()
+    adapter = ClaudeCodeAdapter()
+    mock_llm.set_evolve_response("- Skill content")
+    evolver = Evolver(storage, bus, mock_llm, adapter)
+    config_path = str(tmp_path / "CLAUDE.md")
+
+    # Store one positive and one anti skill
+    pos_skill = Skill(
+        rule="Use validation", context_pattern="API", confidence=0.8,
+        source_experiences=["e1"], evidence_count=1,
+        valence_summary={"positive": 3, "negative": 0}, skill_type="positive",
+    )
+    anti_skill = Skill(
+        rule="Never use eval", context_pattern="Security", confidence=0.9,
+        source_experiences=["e2"], evidence_count=1,
+        valence_summary={"positive": 0, "negative": 4}, skill_type="anti",
+    )
+    storage.store_skill(pos_skill)
+    storage.store_skill(anti_skill)
+
+    record = evolver.evolve(config_path)
+    assert record is not None
+    content = (tmp_path / "CLAUDE.md").read_text()
+    assert "<!-- engram-ai:start -->" in content
+    assert "<!-- engram-ai:anti-skills:start -->" in content
+    # Both skills marked applied
+    assert len(storage.get_unapplied_skills()) == 0

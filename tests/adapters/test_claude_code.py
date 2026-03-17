@@ -1,4 +1,5 @@
 import pytest
+from engram_ai.adapters.claude_code import ClaudeCodeAdapter
 
 @pytest.fixture
 def claude_md(tmp_path):
@@ -49,3 +50,40 @@ def test_write_skills_creates_file_if_missing(adapter, tmp_path):
 def test_read_current_config(adapter, claude_md):
     content = adapter.read_config(str(claude_md))
     assert "Project Rules" in content
+
+
+def test_write_anti_skills_new_file(tmp_path):
+    adapter = ClaudeCodeAdapter()
+    path = str(tmp_path / "CLAUDE.md")
+    adapter.write_anti_skills(path, "- Never store tokens in query params")
+    content = (tmp_path / "CLAUDE.md").read_text()
+    assert "<!-- engram-ai:anti-skills:start -->" in content
+    assert "Anti-Patterns (Avoid)" in content
+    assert "Never store tokens" in content
+    assert "<!-- engram-ai:anti-skills:end -->" in content
+
+
+def test_write_anti_skills_replaces_existing(tmp_path):
+    adapter = ClaudeCodeAdapter()
+    path = str(tmp_path / "CLAUDE.md")
+    (tmp_path / "CLAUDE.md").write_text(
+        "before\n<!-- engram-ai:anti-skills:start -->\nold\n<!-- engram-ai:anti-skills:end -->\nafter\n"
+    )
+    adapter.write_anti_skills(path, "- New anti-pattern")
+    content = (tmp_path / "CLAUDE.md").read_text()
+    assert "New anti-pattern" in content
+    assert "old" not in content
+    assert "before" in content
+    assert "after" in content
+
+
+def test_write_skills_and_anti_skills_coexist(tmp_path):
+    adapter = ClaudeCodeAdapter()
+    path = str(tmp_path / "CLAUDE.md")
+    adapter.write_skills(path, "- Use schema validation")
+    adapter.write_anti_skills(path, "- Never use eval()")
+    content = (tmp_path / "CLAUDE.md").read_text()
+    assert "<!-- engram-ai:start -->" in content
+    assert "Use schema validation" in content
+    assert "<!-- engram-ai:anti-skills:start -->" in content
+    assert "Never use eval()" in content

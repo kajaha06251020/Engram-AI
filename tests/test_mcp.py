@@ -63,3 +63,27 @@ async def test_call_engram_record(forge_and_server):
         "valence": 0.5,
     })
     assert "Recorded" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_engram_conflicts(forge_and_server):
+    _, server = forge_and_server
+    result = await _call_tool(server, "engram_conflicts", {})
+    assert result[0].text  # Should return text output
+
+
+@pytest.mark.asyncio
+async def test_engram_decay(forge_and_server):
+    _, server = forge_and_server
+    result = await _call_tool(server, "engram_decay", {})
+    assert result[0].text
+
+
+@pytest.mark.asyncio
+async def test_list_tools_includes_v02(forge_and_server):
+    _, server = forge_and_server
+    tools = await _list_tools(server)
+    tool_names = [t.name for t in tools]
+    assert "engram_conflicts" in tool_names
+    assert "engram_merge" in tool_names
+    assert "engram_decay" in tool_names

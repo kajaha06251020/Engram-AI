@@ -6,6 +6,7 @@ from pathlib import Path
 
 import click
 
+from engram_ai.adapters import ADAPTER_REGISTRY
 from engram_ai.forge import Forge
 
 logger = logging.getLogger(__name__)
@@ -27,12 +28,16 @@ def _load_config() -> dict:
     return DEFAULT_CONFIG
 
 
-def _get_forge() -> Forge:
+def _get_forge(adapter_name="claude-code") -> Forge:
     storage_override = os.environ.get("ENGRAM_AI_STORAGE")
     if storage_override:
-        return Forge(storage_path=storage_override)
+        return Forge.with_adapter(adapter_name, storage_path=storage_override, enable_policies=True)
     config = _load_config()
-    return Forge(storage_path=config.get("storage_path", str(CONFIG_DIR / "data")))
+    return Forge.with_adapter(
+        adapter_name,
+        storage_path=config.get("storage_path", str(CONFIG_DIR / "data")),
+        enable_policies=True,
+    )
 
 
 @click.group()
@@ -131,16 +136,58 @@ def crystallize(min_experiences, min_confidence):
 
 
 @main.command()
-@click.option("--config", "config_path", default="./CLAUDE.md", help="Config file to evolve")
-def evolve(config_path):
+@click.option("--config", "config_path", default=None, help="Config file to evolve")
+@click.option("--adapter", "adapter_name", default="claude-code",
+              type=click.Choice(list(ADAPTER_REGISTRY.keys())),
+              help="Target framework adapter")
+def evolve(config_path, adapter_name):
     """Write learned skills to agent config file."""
-    forge = _get_forge()
+    if config_path is None:
+        config_path = ADAPTER_REGISTRY[adapter_name]["default_config"]
+    forge = _get_forge(adapter_name)
     record = forge.evolve(config_path=config_path)
     if record is None:
         click.echo("No unapplied skills to evolve.")
         return
     click.echo(f"Evolved: {record.diff}")
     click.echo(f"Config updated: {config_path}")
+
+
+@main.command()
+def decay():
+    """Apply time-based confidence decay to all skills."""
+    forge = _get_forge()
+    updated = forge.apply_decay()
+    if not updated:
+        click.echo("No skills to decay.")
+        return
+    click.echo(f"Decayed {len(updated)} skill(s):")
+    for skill in updated:
+        click.echo(f"  - {skill.rule} (confidence: {skill.confidence:.2f})")
+
+
+@main.command()
+def conflicts():
+    """List conflicting skill pairs."""
+    forge = _get_forge()
+    pairs = forge.detect_conflicts()
+    if not pairs:
+        click.echo("No conflicts detected.")
+        return
+    click.echo(f"{len(pairs)} conflict(s) found:")
+    for a, b in pairs:
+        click.echo(f"  - [{a.id[:8]}] {a.rule}")
+        click.echo(f"    vs [{b.id[:8]}] {b.rule}")
+
+
+@main.command()
+@click.argument("id_a")
+@click.argument("id_b")
+def merge(id_a, id_b):
+    """Auto-merge two conflicting skills."""
+    forge = _get_forge()
+    merged = forge.merge_skills(id_a, id_b)
+    click.echo(f"Merged into: {merged.rule} (confidence: {merged.confidence:.2f})")
 
 
 @main.command()
