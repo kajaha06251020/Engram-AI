@@ -156,6 +156,7 @@ engram-ai query "topic"  # Search past experiences
 engram-ai crystallize    # Extract skills from experiences
 engram-ai evolve         # Write skills to CLAUDE.md
 engram-ai serve          # Start MCP server
+engram-ai dashboard      # Launch web dashboard (default: http://127.0.0.1:3333)
 ```
 
 ## MCP Tools
@@ -198,17 +199,40 @@ Experiences ──► Cluster by similarity ──► LLM extracts pattern ─�
                 (ChromaDB cosine)         (per cluster)            (rule + confidence)
 ```
 
+## Web Dashboard
+
+Engram-AI includes a built-in real-time web dashboard for visualizing experiences, skills, and neural graphs.
+
+```bash
+engram-ai dashboard --port 3333
+```
+
+**4 pages:**
+
+| Page | Description |
+|------|-------------|
+| **Overview** | Stats cards, valence trend chart, mini neural graph, recent experiences |
+| **Experiences** | Searchable, filterable, sortable table with expandable rows |
+| **Skills** | Card grid with confidence bars, crystallize/evolve action buttons |
+| **Graph** | Force-directed neural graph with hexagon skill nodes, click-to-highlight |
+
+**Features:**
+- Real-time updates via WebSocket (new experiences/skills appear instantly)
+- Dark theme with custom color palette
+- Zero-dependency serving (static Next.js export bundled with the package)
+- No Node.js required for users
+
 ## Roadmap
 
 Engram-AI v0.1 is the foundation. The architecture supports these planned features:
 
+- [x] **Dashboard** — Web UI for experience/skill visualization
 - [ ] **Emotion tagging** — Richer affect beyond valence
 - [ ] **Experience chains** — Linked sequences of related experiences
 - [ ] **Forgetting curves** — Time-weighted relevance decay
 - [ ] **Skill marketplace** — Share learned skills across agents
 - [ ] **Cross-agent transfer** — Transfer learning between agent instances
 - [ ] **Multi-LLM support** — OpenAI, local models, etc.
-- [ ] **Dashboard** — Web UI for experience/skill visualization
 - [ ] **Reward shaping policies** — Custom valence strategies
 - [ ] **Hierarchical memory** — Episode → skill → meta-skill layers
 - [ ] **Privacy controls** — Selective memory, user-controlled deletion
