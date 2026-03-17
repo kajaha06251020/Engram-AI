@@ -8,6 +8,7 @@ import click
 
 from engram_ai.adapters import ADAPTER_REGISTRY
 from engram_ai.forge import Forge
+from engram_ai.project import ProjectManager
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,13 @@ DEFAULT_CONFIG = {
     "llm": {"provider": "claude", "model": "claude-sonnet-4-20250514"},
     "crystallize": {"min_experiences": 3, "min_confidence": 0.7},
     "evolve": {"default_config_path": "./CLAUDE.md", "strategy": "append"},
+    "default_project": "default",
+    "scheduler": {
+        "decay_interval_hours": 6,
+        "conflict_interval_hours": 12,
+        "crystallize_threshold": 10,
+        "enabled": True,
+    },
 }
 
 
@@ -28,22 +36,35 @@ def _load_config() -> dict:
     return DEFAULT_CONFIG
 
 
-def _get_forge(adapter_name="claude-code") -> Forge:
-    storage_override = os.environ.get("ENGRAM_AI_STORAGE")
-    if storage_override:
-        return Forge.with_adapter(adapter_name, storage_path=storage_override, enable_policies=True)
+def _get_project_manager() -> ProjectManager:
     config = _load_config()
-    return Forge.with_adapter(
-        adapter_name,
-        storage_path=config.get("storage_path", str(CONFIG_DIR / "data")),
-        enable_policies=True,
-    )
+    base_path = Path(os.environ.get("ENGRAM_AI_STORAGE", config.get("storage_path", str(CONFIG_DIR / "data"))))
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    llm = None
+    if api_key:
+        from engram_ai.llm.claude import ClaudeLLM
+        llm = ClaudeLLM(api_key=api_key)
+    return ProjectManager(base_path=base_path, llm=llm, config=config)
+
+
+def _get_forge(adapter_name="claude-code", project=None) -> Forge:
+    pm = _get_project_manager()
+    forge = pm.get_forge(project)
+    if adapter_name != "claude-code":
+        entry = ADAPTER_REGISTRY.get(adapter_name)
+        if entry:
+            forge._adapter = entry["class"]()
+    return forge
 
 
 @click.group()
-def main():
+@click.option("--project", "-p", default=None, help="Project name (default: from config)")
+@click.pass_context
+def main(ctx, project):
     """Engram-AI: Experience-driven memory for AI agents."""
     logging.basicConfig(level=logging.INFO)
+    ctx.ensure_object(dict)
+    ctx.obj["project"] = project
 
 
 @main.command()
@@ -108,9 +129,10 @@ def setup():
 
 
 @main.command()
-def status():
+@click.pass_context
+def status(ctx):
     """Show Engram-AI statistics."""
-    forge = _get_forge()
+    forge = _get_forge(project=ctx.obj.get("project"))
     stats = forge.status()
     click.echo(f"Experiences: {stats['total_experiences']}")
     click.echo(f"Skills: {stats['total_skills']}")
@@ -120,9 +142,10 @@ def status():
 @main.command()
 @click.option("--min-experiences", default=3, help="Minimum experiences for clustering")
 @click.option("--min-confidence", default=0.7, help="Minimum confidence threshold")
-def crystallize(min_experiences, min_confidence):
+@click.pass_context
+def crystallize(ctx, min_experiences, min_confidence):
     """Crystallize skills from accumulated experiences."""
-    forge = _get_forge()
+    forge = _get_forge(project=ctx.obj.get("project"))
     skills = forge.crystallize(
         min_experiences=min_experiences,
         min_confidence=min_confidence,
@@ -140,11 +163,12 @@ def crystallize(min_experiences, min_confidence):
 @click.option("--adapter", "adapter_name", default="claude-code",
               type=click.Choice(list(ADAPTER_REGISTRY.keys())),
               help="Target framework adapter")
-def evolve(config_path, adapter_name):
+@click.pass_context
+def evolve(ctx, config_path, adapter_name):
     """Write learned skills to agent config file."""
     if config_path is None:
         config_path = ADAPTER_REGISTRY[adapter_name]["default_config"]
-    forge = _get_forge(adapter_name)
+    forge = _get_forge(adapter_name, project=ctx.obj.get("project"))
     record = forge.evolve(config_path=config_path)
     if record is None:
         click.echo("No unapplied skills to evolve.")
@@ -154,9 +178,10 @@ def evolve(config_path, adapter_name):
 
 
 @main.command()
-def decay():
+@click.pass_context
+def decay(ctx):
     """Apply time-based confidence decay to all skills."""
-    forge = _get_forge()
+    forge = _get_forge(project=ctx.obj.get("project"))
     updated = forge.apply_decay()
     if not updated:
         click.echo("No skills to decay.")
@@ -167,9 +192,10 @@ def decay():
 
 
 @main.command()
-def conflicts():
+@click.pass_context
+def conflicts(ctx):
     """List conflicting skill pairs."""
-    forge = _get_forge()
+    forge = _get_forge(project=ctx.obj.get("project"))
     pairs = forge.detect_conflicts()
     if not pairs:
         click.echo("No conflicts detected.")
@@ -183,9 +209,10 @@ def conflicts():
 @main.command()
 @click.argument("id_a")
 @click.argument("id_b")
-def merge(id_a, id_b):
+@click.pass_context
+def merge(ctx, id_a, id_b):
     """Auto-merge two conflicting skills."""
-    forge = _get_forge()
+    forge = _get_forge(project=ctx.obj.get("project"))
     merged = forge.merge_skills(id_a, id_b)
     click.echo(f"Merged into: {merged.rule} (confidence: {merged.confidence:.2f})")
 
@@ -193,9 +220,10 @@ def merge(id_a, id_b):
 @main.command()
 @click.argument("context")
 @click.option("-k", default=5, help="Number of results")
-def query(context, k):
+@click.pass_context
+def query(ctx, context, k):
     """Query past experiences for best action."""
-    forge = _get_forge()
+    forge = _get_forge(project=ctx.obj.get("project"))
     result = forge.query(context, k=k)
 
     if result["best"]:
@@ -282,3 +310,31 @@ def hook_user_prompt_submit():
         )
     except Exception:
         pass  # Hooks must never block Claude Code
+
+
+@main.group()
+def projects():
+    """Manage projects."""
+    pass
+
+
+@projects.command("list")
+def projects_list():
+    """List all projects."""
+    pm = _get_project_manager()
+    names = pm.list_projects()
+    if not names:
+        click.echo("No projects found.")
+    else:
+        for name in names:
+            click.echo(f"  {name}")
+
+
+@projects.command("delete")
+@click.argument("name")
+@click.confirmation_option(prompt="Are you sure you want to delete this project?")
+def projects_delete(name):
+    """Delete a project."""
+    pm = _get_project_manager()
+    pm.delete_project(name)
+    click.echo(f"Deleted project: {name}")
