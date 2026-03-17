@@ -1,5 +1,4 @@
 import pytest
-from pathlib import Path
 from engram_ai.project import ProjectManager
 
 
@@ -17,7 +16,7 @@ def test_get_forge_creates_project_dir(tmp_path, mock_llm):
 
 def test_get_forge_default_project(tmp_path, mock_llm):
     pm = _make_pm(tmp_path, mock_llm)
-    forge = pm.get_forge()
+    pm.get_forge()
     assert (tmp_path / "default").is_dir()
 
 

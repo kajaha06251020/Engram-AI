@@ -1,7 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from engram_ai import Forge
 from engram_ai.dashboard.server import create_app
 from engram_ai.models.skill import Skill
 
@@ -194,7 +193,7 @@ def test_graph_includes_chain_edges(tmp_path, mock_llm):
     pm = ProjectManager(base_path=tmp_path, llm=mock_llm, config={"default_project": "default"})
     forge = pm.get_forge("default")
     exp1 = forge.record(action="first", context="ctx", outcome="ok", valence=0.5)
-    exp2 = forge.record(action="second", context="ctx", outcome="ok", valence=0.5, parent_id=exp1.id)
+    forge.record(action="second", context="ctx", outcome="ok", valence=0.5, parent_id=exp1.id)
     app = create_app(project_manager=pm)
     client = TestClient(app)
     data = client.get("/api/graph").json()
