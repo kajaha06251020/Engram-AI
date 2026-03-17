@@ -27,26 +27,34 @@ Add an `engram_observe` MCP tool that accepts a conversation snippet, uses LLM t
     "max_turns": {
       "type": "integer",
       "description": "Max turn pairs to use from the end of messages",
-      "default": 3
+      "default": 3,
+      "minimum": 1
     },
     "crystallize_threshold": {
       "type": "integer",
-      "description": "Auto-crystallize when total experiences >= this value",
-      "default": 5
+      "description": "Auto-crystallize every N new experiences since last crystallize",
+      "default": 5,
+      "minimum": 2
     }
   },
   "required": ["messages"]
 }
 ```
 
+### Validation
+
+- If `messages` is empty or contains no content, return `"No notable experience detected."` immediately without calling the LLM.
+- Messages with empty `content` strings are stripped before processing.
+- Only `"user"` and `"assistant"` roles are kept; other roles (e.g., `"system"`) are stripped.
+
 ### Behavior
 
-1. Trim `messages` to the last `max_turns` turn pairs (1 turn = user + assistant). If messages has fewer turns, use all.
+1. Validate and trim `messages` to the last `max_turns` turn pairs (see Validation and Message Trimming sections).
 2. Call `BaseLLM.extract_experience(trimmed_messages)` to determine if the conversation contains a recordable experience.
 3. If LLM returns `None` (no notable experience): respond with `"No notable experience detected."` and stop.
 4. If LLM returns an experience dict: call `Forge.record(action, context, outcome, valence)` to persist it.
-5. After recording, check if total experience count >= `crystallize_threshold`. If so, run `Forge.crystallize()` automatically.
-6. Return a summary including the recorded experience and any crystallized skills.
+5. After recording, check crystallize trigger condition (see Crystallize Trigger Logic). If triggered, run `Forge.crystallize()` automatically.
+6. The MCP handler formats the `Forge.observe()` return dict into human-readable text following the response examples below.
 
 ### Response Examples
 
@@ -85,17 +93,42 @@ def extract_experience(self, messages: list[dict]) -> dict | None:
     """
 ```
 
-- Default implementation raises `NotImplementedError` (backward-compatible with v0.2 pattern).
-- `ClaudeLLM`: sends conversation to Anthropic API with a system prompt instructing it to extract experiences (technical learnings, failure lessons, success patterns) or return null for casual/question-only conversations.
+- Default implementation raises `NotImplementedError` (backward-compatible with v0.2 pattern, matching `verify_conflict`/`merge_skills`).
+- `ClaudeLLM`: sends conversation to Anthropic API with a system prompt instructing it to extract experiences or return null.
 - `MockLLM` (test fixture): returns a canned experience dict for messages containing specific keywords, `None` otherwise.
 
-### ClaudeLLM Prompt Strategy
+### Error Handling
 
-The system prompt instructs the LLM to:
-- Look for technical learnings, failure lessons, success patterns, or important caveats in the conversation
-- Skip casual chat, pure questions without resolution, or trivial exchanges
-- Return a JSON object with `action`, `context`, `outcome`, `valence` fields
-- Derive `valence` from the conversation tone and outcome (-1.0 to 1.0)
+- If `extract_experience()` raises `LLMError`, `Forge.observe()` propagates it to the MCP layer, which catches it via the existing top-level `except Exception` handler. This matches the existing pattern for all other MCP tools.
+- If `extract_experience()` raises `NotImplementedError` (LLM backend doesn't support it), `Forge.observe()` raises `EngramError("observe requires an LLM that supports extract_experience")`. This matches the existing `merge_skills` guard pattern in Forge.
+
+### ClaudeLLM Implementation
+
+**System prompt (draft):**
+
+```
+You analyze conversations between a user and an AI assistant to extract notable experiences worth recording for future learning.
+
+Look for: technical learnings, failure lessons, success patterns, debugging insights, or important caveats.
+Skip: casual chat, greetings, pure questions without resolution, trivial exchanges.
+
+If the conversation contains a recordable experience, respond with ONLY a JSON object:
+{"action": "<what was done>", "context": "<situation/problem>", "outcome": "<what happened/result>", "valence": <float from -1.0 to 1.0>}
+
+If there is no notable experience, respond with ONLY:
+{"experience": null}
+```
+
+**Conversation is passed as a formatted transcript in the user message:**
+```
+[user]: How do I fix the N+1 query?
+[assistant]: Use eager loading with select_related()...
+```
+
+**Response parsing:**
+- Parse JSON response. If `json.JSONDecodeError` or missing keys, log warning and return `None`.
+- Clamp `valence` to [-1.0, 1.0].
+- If response contains `"experience": null`, return `None`.
 
 ## Forge Extension
 
@@ -108,19 +141,30 @@ def observe(self, messages: list[dict], max_turns: int = 3,
 
 **Returns:** `{"recorded": Experience | None, "crystallized": list[Skill]}`
 
+**Guard:** If `self._llm` does not support `extract_experience` (raises `NotImplementedError`), raise `EngramError("observe requires an LLM that supports extract_experience")`.
+
 ### Message Trimming
 
 Private utility `_trim_messages(messages, max_turns)`:
-- 1 turn = 1 user message + 1 assistant message pair
-- Takes the last `max_turns` pairs from the end of `messages`
-- If fewer turns exist, returns all messages
+- Strip messages with empty `content` or roles other than `"user"`/`"assistant"`
+- Take the last `max_turns * 2` messages from the filtered list (simple slice, no pairing logic)
+- If fewer messages exist, return all
+
+This simple approach avoids complex pairing logic for edge cases like consecutive same-role messages or trailing user messages.
 
 ### Crystallize Trigger Logic
 
-After recording an experience:
-- Count total experiences via `self._storage.get_all_experiences()`
-- If count >= `crystallize_threshold`, run `self.crystallize()`
-- Otherwise skip (saves LLM cost)
+After recording an experience, crystallize triggers based on a **modulo check** to avoid re-triggering on every call after the threshold is first reached:
+
+```python
+count = len(self._storage.get_all_experiences())
+if count >= crystallize_threshold and count % crystallize_threshold == 0:
+    skills = self.crystallize()
+```
+
+This means crystallize runs at experience counts 5, 10, 15, 20... (for threshold=5), not on every call after 5. No state tracking needed.
+
+**Concurrency note:** The MCP server runs single-threaded on stdio. Concurrent crystallize is not a concern for the current architecture. If the server is later made concurrent, a lock should be added.
 
 ## Files Changed
 
