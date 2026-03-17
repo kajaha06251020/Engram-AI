@@ -42,7 +42,11 @@ class ChromaDBStorage(BaseStorage):
         count = self._experiences.count()
         if count == 0:
             return []
-        results = self._experiences.query(query_texts=[context], n_results=min(k, count))
+        try:
+            results = self._experiences.query(query_texts=[context], n_results=min(k, count))
+        except chromadb.errors.InternalError:
+            logger.warning("ChromaDB HNSW index not ready, returning empty results")
+            return []
         output = []
         for i, meta in enumerate(results["metadatas"][0]):
             exp = Experience.model_validate_json(meta["data"])
@@ -87,10 +91,14 @@ class ChromaDBStorage(BaseStorage):
         count = self._skills.count()
         if count == 0:
             return []
-        results = self._skills.query(
-            query_texts=[text], n_results=min(k, count),
-            where={"status": "active"},
-        )
+        try:
+            results = self._skills.query(
+                query_texts=[text], n_results=min(k, count),
+                where={"status": "active"},
+            )
+        except chromadb.errors.InternalError:
+            logger.warning("ChromaDB HNSW index not ready, returning empty results")
+            return []
         output = []
         for i, meta in enumerate(results["metadatas"][0]):
             skill = Skill.model_validate_json(meta["data"])
