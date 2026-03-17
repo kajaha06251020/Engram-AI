@@ -23,3 +23,18 @@ class BaseLLM(ABC):
             f"{type(self).__name__} does not support merge_skills. "
             "Upgrade your LLM implementation to v0.2."
         )
+
+    def extract_experience(self, messages: list[dict]) -> dict | None:
+        """Extract a recordable experience from a conversation snippet.
+
+        Args:
+            messages: List of {"role": "user"|"assistant", "content": str}
+
+        Returns:
+            {"action": str, "context": str, "outcome": str, "valence": float}
+            or None if no notable experience found.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support extract_experience. "
+            "Upgrade your LLM implementation."
+        )
