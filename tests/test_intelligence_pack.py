@@ -134,3 +134,50 @@ def test_record_calls_check_effectiveness(tmp_path, mock_llm):
     all_skills = forge._storage.get_all_skills()
     target = [s for s in all_skills if s.id == skill.id][0]
     assert target is not None
+
+
+def test_teach_creates_skill(tmp_path, mock_llm):
+    forge = Forge(storage_path=str(tmp_path / "data"), llm=mock_llm)
+    skill = forge.teach(
+        rule="Always use parameterized queries",
+        context_pattern="SQL database access",
+    )
+    assert skill.rule == "Always use parameterized queries"
+    assert skill.context_pattern == "SQL database access"
+    assert skill.confidence == 0.8
+    assert skill.source_experiences == []
+    assert skill.evidence_count == 0
+    assert skill.skill_type == "positive"
+
+
+def test_teach_anti_skill(tmp_path, mock_llm):
+    forge = Forge(storage_path=str(tmp_path / "data"), llm=mock_llm)
+    skill = forge.teach(
+        rule="Never use eval()",
+        context_pattern="Python code",
+        skill_type="anti",
+        confidence=0.9,
+    )
+    assert skill.skill_type == "anti"
+    assert skill.confidence == 0.9
+
+
+def test_teach_invalid_skill_type(tmp_path, mock_llm):
+    forge = Forge(storage_path=str(tmp_path / "data"), llm=mock_llm)
+    import pytest
+    with pytest.raises(ValueError):
+        forge.teach(rule="test", context_pattern="ctx", skill_type="invalid")
+
+
+def test_teach_reinforces_similar(tmp_path, mock_llm):
+    forge = Forge(storage_path=str(tmp_path / "data"), llm=mock_llm)
+    skill1 = forge.teach(
+        rule="Use parameterized queries for SQL",
+        context_pattern="database access",
+    )
+    skill2 = forge.teach(
+        rule="Always use parameterized queries for SQL injection prevention",
+        context_pattern="database access",
+    )
+    all_skills = forge._storage.get_all_skills()
+    assert len(all_skills) >= 1

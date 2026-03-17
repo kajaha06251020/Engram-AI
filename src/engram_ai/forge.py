@@ -222,6 +222,41 @@ class Forge:
 
         return {"recorded": exp, "crystallized": crystallized}
 
+    def teach(self, rule: str, context_pattern: str,
+              skill_type: str = "positive",
+              confidence: float = 0.8) -> Skill:
+        """Create a skill directly from user instruction."""
+        if skill_type not in ("positive", "anti"):
+            raise ValueError(f"skill_type must be 'positive' or 'anti', got {skill_type!r}")
+
+        # Check for similar existing skill
+        try:
+            similar = self._storage.query_skills(rule, k=3)
+            for existing_skill, sim in similar:
+                if sim >= 0.5:
+                    existing_skill.confidence = min(1.0, round(existing_skill.confidence + 0.1, 4))
+                    existing_skill.reinforcement_count += 1
+                    self._storage.update_skill(existing_skill)
+                    from engram_ai.events.events import SKILL_REINFORCED
+                    self._event_bus.emit(SKILL_REINFORCED, existing_skill)
+                    return existing_skill
+        except Exception:
+            pass
+
+        skill = Skill(
+            rule=rule,
+            context_pattern=context_pattern,
+            confidence=confidence,
+            source_experiences=[],
+            evidence_count=0,
+            valence_summary={},
+            skill_type=skill_type,
+        )
+        self._storage.store_skill(skill)
+        from engram_ai.events.events import SKILL_CRYSTALLIZED
+        self._event_bus.emit(SKILL_CRYSTALLIZED, skill)
+        return skill
+
     def on(self, event_name: str, callback: Callable) -> None:
         self._event_bus.on(event_name, callback)
 
