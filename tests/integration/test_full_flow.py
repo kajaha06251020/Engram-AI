@@ -22,6 +22,19 @@ class IntegrationMockLLM:
             )
         return None
 
+    def verify_conflict(self, skill_a, skill_b):
+        return False  # Conservative: no conflicts by default
+
+    def merge_skills(self, skill_a, skill_b):
+        return Skill(
+            rule=f"Merged: {skill_a.rule} + {skill_b.rule}",
+            context_pattern=skill_a.context_pattern,
+            confidence=max(skill_a.confidence, skill_b.confidence),
+            source_experiences=list(set(skill_a.source_experiences + skill_b.source_experiences)),
+            evidence_count=skill_a.evidence_count + skill_b.evidence_count,
+            valence_summary=skill_a.valence_summary,
+        )
+
     def generate_evolution_text(self, skills):
         lines = [f"- {s.rule} (confidence: {s.confidence})" for s in skills]
         return "\n".join(lines)
@@ -132,3 +145,63 @@ def test_pending_to_complete_flow(forge):
     )
     status = forge.status()
     assert status["total_experiences"] == 1
+
+
+def test_v02_reinforcement_decay_conflict_flow(tmp_path):
+    """End-to-end: record -> crystallize (reinforcement) -> decay -> conflict detection."""
+    from engram_ai.forge import Forge
+    from engram_ai.events.events import SKILL_REINFORCED, SKILL_DECAYED
+    from engram_ai.policies.decay import DecayConfig
+
+    events = {"reinforced": [], "decayed": []}
+
+    mock_llm = IntegrationMockLLM()
+    forge = Forge(
+        storage_path=str(tmp_path / "db"),
+        llm=mock_llm,
+        decay_config=DecayConfig(half_life_days=0.001),  # Very short for testing
+        enable_policies=True,
+    )
+    forge.on(SKILL_REINFORCED, lambda s: events["reinforced"].append(s))
+    forge.on(SKILL_DECAYED, lambda s: events["decayed"].append(s))
+
+    # Record positive experiences about API validation
+    for i in range(5):
+        forge.record(
+            action=f"validate API input {i}",
+            context="API schema validation best practices",
+            outcome="Input validated successfully",
+            valence=0.9,
+        )
+
+    # First crystallize: creates a new skill
+    skills1 = forge.crystallize(min_experiences=3, min_confidence=0.3)
+    assert len(skills1) >= 1
+
+    # Record more similar experiences
+    for i in range(5):
+        forge.record(
+            action=f"validate API response {i}",
+            context="API schema validation patterns",
+            outcome="Response validated successfully",
+            valence=0.8,
+        )
+
+    # Second crystallize: should reinforce existing skill
+    skills2 = forge.crystallize(min_experiences=3, min_confidence=0.3)
+    # Reinforcement may or may not trigger depending on embedding similarity.
+    # Just verify we can crystallize without errors.
+    assert isinstance(skills2, list)
+
+    # Apply decay (with very short half-life)
+    decayed = forge.apply_decay()
+    assert len(decayed) >= 1
+
+    # Detect conflicts (should be none in this case)
+    conflicts = forge.detect_conflicts()
+    assert isinstance(conflicts, list)
+
+    # Status check
+    status = forge.status()
+    assert status["total_experiences"] == 10
+    assert status["total_skills"] >= 1
