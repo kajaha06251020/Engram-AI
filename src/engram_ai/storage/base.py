@@ -38,3 +38,6 @@ class BaseStorage(ABC):
     @abstractmethod
     def get_experience(self, experience_id: str) -> Experience | None:
         """Fetch a single experience by ID."""
+
+    def close(self) -> None:
+        """Release any held resources (e.g. file handles). No-op by default."""

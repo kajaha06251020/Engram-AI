@@ -127,3 +127,10 @@ class ChromaDBStorage(BaseStorage):
         if not results["metadatas"]:
             return None
         return Experience.model_validate_json(results["metadatas"][0]["data"])
+
+    def close(self) -> None:
+        """Release SQLite file handles held by the ChromaDB client."""
+        try:
+            self._client.close()
+        except Exception:
+            pass

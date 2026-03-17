@@ -179,3 +179,7 @@ class Forge:
 
     def on(self, event_name: str, callback: Callable) -> None:
         self._event_bus.on(event_name, callback)
+
+    def close(self) -> None:
+        """Release storage resources (e.g. SQLite file handles)."""
+        self._storage.close()
