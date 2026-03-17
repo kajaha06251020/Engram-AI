@@ -166,6 +166,19 @@ def query(context, k):
 
 
 @main.command()
+@click.option("--port", default=3333, help="Dashboard port")
+@click.option("--host", default="127.0.0.1", help="Dashboard host")
+def dashboard(port, host):
+    """Launch the Engram-AI web dashboard."""
+    import uvicorn
+    from engram_ai.dashboard.server import create_app
+
+    app = create_app()
+    click.echo(f"Dashboard: http://{host}:{port}")
+    uvicorn.run(app, host=host, port=port, log_level="info")
+
+
+@main.command()
 def serve():
     """Start MCP server for Claude Code integration."""
     import asyncio

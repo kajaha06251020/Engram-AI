@@ -35,3 +35,8 @@ Thumbs.db
 # Engram-AI data
 .engram-ai/
 pending.jsonl
+
+# Dashboard frontend
+dashboard/node_modules/
+dashboard/.next/
+dashboard/out/
