@@ -99,6 +99,40 @@ def create_mcp_server(forge: Forge) -> Server:
                 description="Apply time-based confidence decay",
                 inputSchema={"type": "object", "properties": {}},
             ),
+            Tool(
+                name="engram_observe",
+                description="Observe a conversation snippet and auto-record experiences",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "messages": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "role": {"type": "string", "enum": ["user", "assistant"]},
+                                    "content": {"type": "string"},
+                                },
+                                "required": ["role", "content"],
+                            },
+                            "description": "Conversation history",
+                        },
+                        "max_turns": {
+                            "type": "integer",
+                            "description": "Max turn pairs to use",
+                            "default": 3,
+                            "minimum": 1,
+                        },
+                        "crystallize_threshold": {
+                            "type": "integer",
+                            "description": "Auto-crystallize every N experiences",
+                            "default": 5,
+                            "minimum": 2,
+                        },
+                    },
+                    "required": ["messages"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -178,6 +212,21 @@ def create_mcp_server(forge: Forge) -> Server:
                 if not updated:
                     return [TextContent(type="text", text="No skills to decay.")]
                 return [TextContent(type="text", text=f"Decayed {len(updated)} skill(s).")]
+
+            elif name == "engram_observe":
+                result = forge.observe(
+                    messages=arguments["messages"],
+                    max_turns=arguments.get("max_turns", 3),
+                    crystallize_threshold=arguments.get("crystallize_threshold", 5),
+                )
+                if result["recorded"] is None:
+                    return [TextContent(type="text", text="No notable experience detected.")]
+                lines = [f'Recorded: "{result["recorded"].action}" (valence: {result["recorded"].valence:.2f})']
+                if result["crystallized"]:
+                    lines.append(f"Auto-crystallized {len(result['crystallized'])} skill(s):")
+                    for s in result["crystallized"]:
+                        lines.append(f"  - {s.rule} (confidence: {s.confidence:.2f})")
+                return [TextContent(type="text", text="\n".join(lines))]
 
             else:
                 return [TextContent(type="text", text=f"Unknown tool: {name}")]
