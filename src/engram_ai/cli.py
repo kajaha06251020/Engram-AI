@@ -243,12 +243,14 @@ def query(ctx, context, k):
 @main.command()
 @click.option("--port", default=3333, help="Dashboard port")
 @click.option("--host", default="127.0.0.1", help="Dashboard host")
-def dashboard(port, host):
+@click.pass_context
+def dashboard(ctx, port, host):
     """Launch the Engram-AI web dashboard."""
     import uvicorn
     from engram_ai.dashboard.server import create_app
 
-    app = create_app()
+    pm = _get_project_manager()
+    app = create_app(project_manager=pm)
     click.echo(f"Dashboard: http://{host}:{port}")
     uvicorn.run(app, host=host, port=port, log_level="info")
 
