@@ -83,7 +83,7 @@ def test_event_decay_on_negative_experience():
     # Positive skill
     skill = _make_skill(confidence=0.8, rule="Always use caching")
     storage.add_skill(skill)
-    policy = DecayPolicy(storage, bus)
+    DecayPolicy(storage, bus)
     # Record a negative experience with context that matches the skill
     exp = Experience(action="used cache", context="caching strategy", outcome="broke", valence=-0.8)
     bus.emit(EXPERIENCE_RECORDED, exp)
@@ -96,7 +96,7 @@ def test_event_decay_ignores_mildly_negative():
     bus = EventBus()
     skill = _make_skill(confidence=0.8)
     storage.add_skill(skill)
-    policy = DecayPolicy(storage, bus)
+    DecayPolicy(storage, bus)
     exp = Experience(action="a", context="c", outcome="o", valence=-0.1)
     bus.emit(EXPERIENCE_RECORDED, exp)
     assert len(storage._updated) == 0  # -0.1 > -0.3 threshold, no decay

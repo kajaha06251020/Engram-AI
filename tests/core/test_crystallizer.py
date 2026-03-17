@@ -129,7 +129,7 @@ def test_reinforcement_bumps_existing_skill(mock_llm):
         )
 
     crystallizer = Crystallizer(storage, bus, mock_llm)
-    skills = crystallizer.crystallize(min_experiences=3, min_confidence=0.5)
+    crystallizer.crystallize(min_experiences=3, min_confidence=0.5)
 
     # Should NOT create new skill — reinforced existing instead
     all_skills = storage.get_all_skills()

@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 from engram_ai.models.experience import Experience
+from engram_ai.models.skill import Skill
 
 def test_mock_llm_conforms_to_base():
     from tests.conftest import MockLLM
@@ -72,8 +73,6 @@ def test_claude_llm_crystallize_returns_none_on_no_pattern():
         result = llm.crystallize_pattern([Experience(action="a", context="c", outcome="o", valence=0.5)])
         assert result is None
 
-
-from engram_ai.models.skill import Skill
 
 
 def test_verify_conflict():

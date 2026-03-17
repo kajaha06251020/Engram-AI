@@ -1,6 +1,7 @@
 import pytest
 from engram_ai.models.experience import Experience
 from engram_ai.models.skill import Skill
+from engram_ai.storage.chromadb import ChromaDBStorage
 
 @pytest.fixture
 def storage(tmp_path):
@@ -49,8 +50,6 @@ def test_get_unapplied_skills(storage):
     assert len(unapplied) == 1
     assert unapplied[0].id == skill2.id
 
-
-from engram_ai.storage.chromadb import ChromaDBStorage
 
 
 def _make_skill(**overrides):

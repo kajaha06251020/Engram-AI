@@ -61,7 +61,7 @@ def test_auto_detect_on_crystallize():
     # Existing positive skill
     existing = _make_skill(rule="Always use ORM", valence_summary={"positive": 5, "negative": 0})
     storage.add_skill(existing)
-    policy = ConflictPolicy(storage, bus, llm)
+    ConflictPolicy(storage, bus, llm)
     # New contradicting skill — add to storage first (matches production: store then emit)
     new_skill = _make_skill(rule="Never use ORM", valence_summary={"positive": 0, "negative": 4})
     storage.add_skill(new_skill)
@@ -78,7 +78,7 @@ def test_no_conflict_when_same_direction():
     bus.on(SKILL_CONFLICT_DETECTED, lambda payload: events.append(payload))
     existing = _make_skill(rule="Use type hints", valence_summary={"positive": 5, "negative": 0})
     storage.add_skill(existing)
-    policy = ConflictPolicy(storage, bus, llm)
+    ConflictPolicy(storage, bus, llm)
     new_skill = _make_skill(rule="Use docstrings", valence_summary={"positive": 4, "negative": 0})
     bus.emit(SKILL_CRYSTALLIZED, new_skill)
     assert len(events) == 0  # same direction, no conflict
