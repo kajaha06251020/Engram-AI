@@ -8,3 +8,6 @@ SKILL_REINFORCED = "skill.reinforced"
 SKILL_CONFLICT_DETECTED = "skill.conflict.detected"
 SKILL_DECAYED = "skill.decayed"
 EXPERIENCE_CHAINED = "experience.chained"
+
+# v0.4
+SKILL_EFFECTIVENESS_UPDATED = "skill.effectiveness.updated"
