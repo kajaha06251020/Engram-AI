@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 class Experience(BaseModel):
     """A recorded experience: action taken in a context, and its outcome."""
     id: str = Field(default_factory=lambda: str(uuid4()))
-    schema_version: int = 1
+    schema_version: int = 2
     action: str
     context: str
     outcome: str
@@ -14,3 +14,7 @@ class Experience(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
     metadata: dict = Field(default_factory=dict)
     status: str = "complete"
+
+    # v0.2: Experience Chain
+    parent_id: str | None = None
+    related_ids: list[str] = Field(default_factory=list)
