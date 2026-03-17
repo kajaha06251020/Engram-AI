@@ -1,15 +1,17 @@
 import logging
+from datetime import datetime
+
 from engram_ai.events.bus import EventBus
-from engram_ai.events.events import SKILL_CRYSTALLIZED
+from engram_ai.events.events import SKILL_CRYSTALLIZED, SKILL_REINFORCED
 from engram_ai.llm.base import BaseLLM
 from engram_ai.models.experience import Experience
 from engram_ai.models.skill import Skill
 from engram_ai.storage.base import BaseStorage
 
 logger = logging.getLogger(__name__)
-# Lowered from 0.8 to 0.4: ChromaDB's default embedding model produces
-# max ~0.59 cosine similarity for short near-duplicate texts.
 SIMILARITY_THRESHOLD = 0.4
+REINFORCEMENT_THRESHOLD = 0.5
+
 
 class Crystallizer:
     """Extracts skill patterns from accumulated experiences."""
@@ -27,10 +29,33 @@ class Crystallizer:
         for cluster in clusters:
             skill = self._llm.crystallize_pattern(cluster)
             if skill is not None and skill.confidence >= min_confidence:
-                self._storage.store_skill(skill)
-                self._event_bus.emit(SKILL_CRYSTALLIZED, skill)
-                skills.append(skill)
+                # Check for reinforcement match
+                existing_match = self._find_matching_skill(skill)
+                if existing_match:
+                    self._reinforce_skill(existing_match, cluster)
+                    skills.append(existing_match)
+                else:
+                    self._storage.store_skill(skill)
+                    self._event_bus.emit(SKILL_CRYSTALLIZED, skill)
+                    skills.append(skill)
         return skills
+
+    def _find_matching_skill(self, candidate: Skill) -> Skill | None:
+        similar = self._storage.query_skills(candidate.rule, k=3)
+        for existing, similarity in similar:
+            if similarity >= REINFORCEMENT_THRESHOLD:
+                return existing
+        return None
+
+    def _reinforce_skill(self, skill: Skill, cluster: list[Experience]) -> None:
+        skill.confidence = min(1.0, skill.confidence + 0.1)
+        skill.reinforcement_count += 1
+        skill.last_reinforced_at = datetime.now()
+        new_ids = [e.id for e in cluster if e.id not in skill.source_experiences]
+        skill.source_experiences.extend(new_ids)
+        skill.evidence_count = len(skill.source_experiences)
+        self._storage.update_skill(skill)
+        self._event_bus.emit(SKILL_REINFORCED, skill)
 
     def _cluster_experiences(self, experiences: list[Experience], min_size: int) -> list[list[Experience]]:
         visited: set[str] = set()
