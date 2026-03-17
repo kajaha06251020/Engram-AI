@@ -63,13 +63,13 @@ class Recorder:
             self._locked_append(exp.model_dump_json() + "\n")
         self._event_bus.emit(EXPERIENCE_PENDING, exp)
 
-    def complete_pending(self, outcome: str, valence: float) -> None:
+    def complete_pending(self, outcome: str, valence: float) -> "Experience | None":
         pending = self._read_last_pending()
         if pending is None:
             logger.info("No pending experience to complete")
-            return
+            return None
         self._remove_last_pending()
-        self.record(
+        return self.record(
             action=pending.action, context=pending.context,
             outcome=outcome, valence=valence,
             metadata=pending.metadata, parent_id=pending.parent_id,

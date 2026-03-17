@@ -67,6 +67,52 @@ def main(ctx, project):
     ctx.obj["project"] = project
 
 
+def _register_hooks(settings_path: Path) -> Path:
+    """Register Engram-AI hooks in Claude Code settings. Returns the settings path."""
+    if settings_path.exists():
+        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    else:
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings = {}
+
+    if "hooks" not in settings:
+        settings["hooks"] = {}
+
+    engram_post_tool = {
+        "matcher": "*",
+        "hooks": [{"type": "command", "command": "engram-ai hook post-tool-use"}],
+    }
+    engram_user_prompt = {
+        "matcher": "",
+        "hooks": [{"type": "command", "command": "engram-ai hook user-prompt-submit"}],
+    }
+
+    if "PostToolUse" not in settings["hooks"]:
+        settings["hooks"]["PostToolUse"] = []
+    if not any("engram-ai" in str(h) for h in settings["hooks"]["PostToolUse"]):
+        settings["hooks"]["PostToolUse"].append(engram_post_tool)
+
+    if "UserPromptSubmit" not in settings["hooks"]:
+        settings["hooks"]["UserPromptSubmit"] = []
+    if not any("engram-ai" in str(h) for h in settings["hooks"]["UserPromptSubmit"]):
+        settings["hooks"]["UserPromptSubmit"].append(engram_user_prompt)
+
+    settings_path.write_text(
+        json.dumps(settings, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return settings_path
+
+
+@main.command("setup-hooks")
+def setup_hooks():
+    """Register Engram-AI hooks in Claude Code settings."""
+    claude_settings_path = Path.home() / ".claude" / "settings.json"
+    _register_hooks(claude_settings_path)
+    click.echo(f"Hooks registered in: {claude_settings_path}")
+    click.echo("Restart Claude Code to activate hooks.")
+
+
 @main.command()
 def setup():
     """Auto-configure Engram-AI for Claude Code."""
@@ -96,34 +142,15 @@ def setup():
         "args": ["serve"],
     }
 
-    # Add hooks (append, don't overwrite existing hooks)
-    if "hooks" not in settings:
-        settings["hooks"] = {}
-
-    engram_post_tool = {
-        "matcher": "*",
-        "hooks": [{"type": "command", "command": "engram-ai hook post-tool-use"}],
-    }
-    engram_user_prompt = {
-        "matcher": "",
-        "hooks": [{"type": "command", "command": "engram-ai hook user-prompt-submit"}],
-    }
-
-    if "PostToolUse" not in settings["hooks"]:
-        settings["hooks"]["PostToolUse"] = []
-    # Only add if not already present
-    if not any("engram-ai" in str(h) for h in settings["hooks"]["PostToolUse"]):
-        settings["hooks"]["PostToolUse"].append(engram_post_tool)
-
-    if "UserPromptSubmit" not in settings["hooks"]:
-        settings["hooks"]["UserPromptSubmit"] = []
-    if not any("engram-ai" in str(h) for h in settings["hooks"]["UserPromptSubmit"]):
-        settings["hooks"]["UserPromptSubmit"].append(engram_user_prompt)
-
+    # Write MCP server config first so _register_hooks can read it back
     claude_settings_path.write_text(
         json.dumps(settings, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+
+    # Register hooks (reads, adds hooks, writes back)
+    _register_hooks(claude_settings_path)
+
     click.echo(f"Updated Claude Code settings: {claude_settings_path}")
     click.echo("\nSetup complete. Restart Claude Code to activate Engram-AI.")
 
@@ -306,10 +333,23 @@ def hook_user_prompt_submit():
         forge = _get_forge()
         valence = forge.detect_valence(user_message)  # Tiered: keyword -> LLM -> default
 
-        forge.complete_pending(
+        experience = forge.complete_pending(
             outcome=user_message[:200],  # Truncate long messages
             valence=valence,
         )
+
+        # Auto-learn: crystallize + evolve after every recorded experience
+        if experience is not None:
+            skills = forge.crystallize(min_experiences=1, min_confidence=0.5)
+            if skills:
+                config = _load_config()
+                config_path = config.get("evolve", {}).get(
+                    "default_config_path", "./CLAUDE.md"
+                )
+                try:
+                    forge.evolve(config_path=config_path)
+                except Exception:
+                    pass  # Evolve failure should not block
     except Exception:
         pass  # Hooks must never block Claude Code
 
