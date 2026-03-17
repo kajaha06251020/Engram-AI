@@ -20,8 +20,9 @@ from engram_ai.forge import Forge
 router = APIRouter(prefix="/api")
 
 
-def get_forge(request: Request) -> Forge:
-    return request.app.state.forge
+def get_forge(request: Request) -> "Forge":
+    project = request.query_params.get("project")
+    return request.app.state.project_manager.get_forge(project)
 
 
 # --- Request schemas ---
@@ -134,6 +135,31 @@ async def get_graph(forge: Forge = Depends(get_forge)) -> dict:
     return {"nodes": nodes, "edges": edges}
 
 
+@router.get("/projects")
+async def list_projects(request: Request) -> list[str]:
+    return request.app.state.project_manager.list_projects()
+
+
+@router.get("/scheduler/status")
+async def scheduler_status(request: Request) -> dict:
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if scheduler is None:
+        return {"enabled": False, "running": False}
+    return scheduler.get_status()
+
+
+@router.post("/scheduler/toggle")
+async def scheduler_toggle(request: Request) -> dict:
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if scheduler is None:
+        return {"enabled": False, "running": False}
+    if scheduler.is_running:
+        await scheduler.stop()
+    else:
+        await scheduler.start()
+    return scheduler.get_status()
+
+
 # --- POST endpoints ---
 
 
@@ -163,7 +189,8 @@ ws_router = APIRouter()
 @ws_router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    forge: Forge = websocket.app.state.forge
+    project = websocket.query_params.get("project")
+    forge: Forge = websocket.app.state.project_manager.get_forge(project)
     queue: asyncio.Queue = asyncio.Queue()
     loop = asyncio.get_running_loop()
 

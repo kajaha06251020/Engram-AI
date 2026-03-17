@@ -7,17 +7,32 @@ from engram_ai.dashboard.server import create_app
 
 @pytest.fixture
 def forge(tmp_path, mock_llm):
-    return Forge(storage_path=str(tmp_path / "test_db"), llm=mock_llm)
+    from engram_ai.project import ProjectManager
+    pm = ProjectManager(base_path=tmp_path, llm=mock_llm, config={"default_project": "default"})
+    return pm.get_forge("default")
 
 
 @pytest.fixture
-def client(forge):
-    app = create_app(forge=forge)
+def client(tmp_path, mock_llm):
+    from engram_ai.project import ProjectManager
+    pm = ProjectManager(base_path=tmp_path, llm=mock_llm, config={"default_project": "default"})
+    app = create_app(project_manager=pm)
     return TestClient(app)
 
 
-def test_websocket_receives_experience_event(client, forge):
+@pytest.fixture
+def forge_and_client(tmp_path, mock_llm):
+    """Shared fixture that returns (forge, client) backed by the same ProjectManager."""
+    from engram_ai.project import ProjectManager
+    pm = ProjectManager(base_path=tmp_path, llm=mock_llm, config={"default_project": "default"})
+    forge = pm.get_forge("default")
+    app = create_app(project_manager=pm)
+    return forge, TestClient(app)
+
+
+def test_websocket_receives_experience_event(forge_and_client):
     """Recording an experience pushes event to connected WebSocket."""
+    forge, client = forge_and_client
     with client.websocket_connect("/ws") as ws:
         forge.record(
             action="Test action",
@@ -30,8 +45,9 @@ def test_websocket_receives_experience_event(client, forge):
         assert data["data"]["action"] == "Test action"
 
 
-def test_websocket_disconnect_cleans_up_handlers(client, forge):
+def test_websocket_disconnect_cleans_up_handlers(forge_and_client):
     """Disconnecting removes EventBus listeners."""
+    forge, client = forge_and_client
     initial = len(forge._event_bus._subscribers.get("experience.recorded", []))
     with client.websocket_connect("/ws"):
         pass
