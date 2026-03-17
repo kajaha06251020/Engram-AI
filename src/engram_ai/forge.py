@@ -62,7 +62,7 @@ class Forge:
         self._llm = llm or ClaudeLLM(api_key=anthropic_api_key)
         self._adapter = adapter or ClaudeCodeAdapter()
 
-        pending_path = str(Path(storage_dir).parent / "pending.jsonl")
+        pending_path = str(Path(storage_dir) / "pending.jsonl")
         self._recorder = Recorder(
             storage=self._storage, event_bus=self._event_bus,
             pending_path=pending_path, llm=self._llm,
