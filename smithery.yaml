@@ -1,3 +1,5 @@
+# Local (stdio) configuration — used when installed via uvx/pip
+# HTTP endpoint published separately via: smithery mcp publish <url>
 startCommand:
   type: stdio
   configSchema:
