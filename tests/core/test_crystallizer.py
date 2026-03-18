@@ -137,3 +137,65 @@ def test_reinforcement_bumps_existing_skill(mock_llm):
     assert all_skills[0].confidence >= 0.85  # bumped from 0.75
     assert all_skills[0].reinforcement_count >= 1
     assert len(reinforced_events) >= 1
+
+
+class TestKeywordFallback:
+    def test_crystallize_without_llm_returns_keyword_skills(self, tmp_path):
+        """Crystallizer with llm=None returns keyword-based skills."""
+        from engram_ai.storage.chromadb import ChromaDBStorage
+        from engram_ai.events.bus import EventBus
+        from engram_ai.core.crystallizer import Crystallizer
+        from engram_ai.models.experience import Experience
+
+        storage = ChromaDBStorage(persist_path=str(tmp_path))
+        event_bus = EventBus()
+        crystallizer = Crystallizer(storage=storage, event_bus=event_bus, llm=None)
+
+        # Add experiences with varied but semantically related text to avoid ChromaDB dedup
+        actions = [
+            "use pytest for unit testing",
+            "run pytest for automated testing",
+            "write pytest tests for verification",
+            "execute pytest suite for validation",
+            "apply pytest framework for testing code",
+        ]
+        for action in actions:
+            exp = Experience(
+                action=action,
+                context=f"writing Python unit tests with pytest framework",
+                outcome="tests pass successfully",
+                valence=0.9,
+            )
+            storage.store_experience(exp)
+
+        skills = crystallizer.crystallize(min_experiences=3, min_confidence=0.4)
+        assert len(skills) >= 1
+        assert skills[0].rule  # non-empty rule
+        assert 0.0 <= skills[0].confidence <= 1.0
+        assert isinstance(skills[0].valence_summary, dict)
+        assert "positive" in skills[0].valence_summary
+        assert "negative" in skills[0].valence_summary
+
+    def test_crystallize_without_llm_skips_below_threshold(self, tmp_path):
+        """Keyword skills below min_confidence threshold are not returned."""
+        from engram_ai.storage.chromadb import ChromaDBStorage
+        from engram_ai.events.bus import EventBus
+        from engram_ai.core.crystallizer import Crystallizer
+        from engram_ai.models.experience import Experience
+
+        storage = ChromaDBStorage(persist_path=str(tmp_path))
+        event_bus = EventBus()
+        crystallizer = Crystallizer(storage=storage, event_bus=event_bus, llm=None)
+
+        for i in range(4):
+            exp = Experience(
+                action=f"deploy release {i} to production environment",
+                context=f"CI pipeline {i} finished successfully",
+                outcome="deployed",
+                valence=0.8,
+            )
+            storage.store_experience(exp)
+
+        # min_confidence=0.9 is above what keyword fallback produces (0.55)
+        skills = crystallizer.crystallize(min_experiences=3, min_confidence=0.9)
+        assert skills == []
