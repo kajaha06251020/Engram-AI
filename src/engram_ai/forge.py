@@ -12,7 +12,6 @@ from engram_ai.core.recorder import Recorder
 from engram_ai.events.bus import EventBus
 from engram_ai.exceptions import EngramError
 from engram_ai.llm.base import BaseLLM
-from engram_ai.llm.claude import ClaudeLLM
 from engram_ai.models.evolution import EvolutionRecord
 from engram_ai.models.experience import Experience
 from engram_ai.models.skill import Skill
@@ -59,7 +58,21 @@ class Forge:
 
         storage_dir = storage_path or str(DEFAULT_DATA_PATH)
         self._storage = storage or ChromaDBStorage(persist_path=storage_dir)
-        self._llm = llm or ClaudeLLM(api_key=anthropic_api_key)
+        if llm is not None:
+            self._llm = llm
+        elif anthropic_api_key is not None:
+            from engram_ai.llm.claude import ClaudeLLM
+            self._llm = ClaudeLLM(api_key=anthropic_api_key)
+        else:
+            # Try ClaudeLLM with env key; raise helpful error if anthropic missing
+            try:
+                from engram_ai.llm.claude import ClaudeLLM
+                self._llm = ClaudeLLM()
+            except ImportError:
+                raise ImportError(
+                    "No LLM provided and anthropic package is not installed. "
+                    "Either pass llm= explicitly, or install: pip install engram-ai[claude]"
+                )
         self._adapter = adapter or ClaudeCodeAdapter()
 
         pending_path = str(Path(storage_dir) / "pending.jsonl")
@@ -98,7 +111,7 @@ class Forge:
     def record(self, action: str, context: str, outcome: str, valence: float,
                metadata: dict | None = None, parent_id: str | None = None) -> Experience:
         exp = self._recorder.record(action, context, outcome, valence, metadata, parent_id)
-        self.check_skill_effectiveness(exp)
+        self._check_skill_effectiveness(exp)
         return exp
 
     def record_pending(self, action: str, context: str,
@@ -145,7 +158,7 @@ class Forge:
     def detect_valence(self, message: str) -> float:
         return self._recorder.detect_valence(message)
 
-    def check_skill_effectiveness(self, experience: "Experience") -> list["Skill"]:
+    def _check_skill_effectiveness(self, experience: "Experience") -> list["Skill"]:
         """Evaluate applied skills against a new experience.
         Returns skills whose confidence was adjusted."""
         from engram_ai.events.events import SKILL_EFFECTIVENESS_UPDATED
@@ -257,7 +270,7 @@ class Forge:
         self._event_bus.emit(SKILL_CRYSTALLIZED, skill)
         return skill
 
-    def recall(self, context: str, k_skills: int = 3, k_experiences: int = 2) -> dict:
+    def _recall(self, context: str, k_skills: int = 3, k_experiences: int = 2) -> dict:
         """Search for relevant skills and negative experiences for a given context."""
         if not context.strip() or (k_skills == 0 and k_experiences == 0):
             return {"skills": [], "warnings": []}

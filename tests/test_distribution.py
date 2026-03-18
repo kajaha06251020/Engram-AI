@@ -75,3 +75,58 @@ class TestDashboardImportGuard:
                 api_mod.create_router(None)
         finally:
             importlib.reload(api_mod)
+
+
+class TestForgeWithoutAnthropic:
+    def test_forge_raises_helpful_error_when_no_llm_and_no_anthropic(self, monkeypatch, tmp_path):
+        """Forge() with no llm and no anthropic raises ImportError with install hint."""
+        import importlib
+        import engram_ai.llm.claude as claude_mod
+        import engram_ai.forge as forge_mod
+        monkeypatch.setitem(sys.modules, "anthropic", None)
+        importlib.reload(claude_mod)
+        importlib.reload(forge_mod)
+        try:
+            with pytest.raises(ImportError, match="pip install engram-ai\\[claude\\]"):
+                forge_mod.Forge(storage_path=str(tmp_path))
+        finally:
+            importlib.reload(claude_mod)
+            importlib.reload(forge_mod)
+
+    def test_forge_works_with_explicit_llm(self, tmp_path):
+        """Forge(llm=mock) works without anthropic."""
+        from tests.conftest import MockLLM
+        from engram_ai.forge import Forge
+        forge = Forge(llm=MockLLM(), storage_path=str(tmp_path))
+        assert forge is not None
+
+    def test_forge_succeeds_when_anthropic_installed_but_no_key(self, tmp_path):
+        """Forge() with anthropic installed but no API key succeeds at construction."""
+        import importlib
+        try:
+            import anthropic  # noqa: F401
+        except ImportError:
+            pytest.skip("anthropic not installed")
+        # Reload to undo any monkeypatching from earlier tests in this session
+        import engram_ai.llm.claude as claude_mod
+        import engram_ai.forge as forge_mod
+        importlib.reload(claude_mod)
+        importlib.reload(forge_mod)
+        forge = forge_mod.Forge(storage_path=str(tmp_path))
+        assert forge is not None
+
+    def test_recall_is_private(self, tmp_path):
+        """recall() is renamed to _recall() and not publicly accessible."""
+        from tests.conftest import MockLLM
+        from engram_ai.forge import Forge
+        forge = Forge(llm=MockLLM(), storage_path=str(tmp_path))
+        assert hasattr(forge, "_recall")
+        assert not hasattr(forge, "recall")
+
+    def test_check_skill_effectiveness_is_private(self, tmp_path):
+        """check_skill_effectiveness() renamed to _check_skill_effectiveness()."""
+        from tests.conftest import MockLLM
+        from engram_ai.forge import Forge
+        forge = Forge(llm=MockLLM(), storage_path=str(tmp_path))
+        assert hasattr(forge, "_check_skill_effectiveness")
+        assert not hasattr(forge, "check_skill_effectiveness")
