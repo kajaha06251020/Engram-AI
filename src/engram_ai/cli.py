@@ -114,11 +114,12 @@ def setup_hooks():
 
 
 @main.command()
-def setup():
+@click.option("--uvx", "use_uvx", is_flag=True, default=False,
+              help="Configure MCP server to use uvx instead of pip-installed engram-ai.")
+def setup(use_uvx: bool):
     """Auto-configure Engram-AI for Claude Code."""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Write default config
     if not CONFIG_FILE.exists():
         CONFIG_FILE.write_text(
             json.dumps(DEFAULT_CONFIG, indent=2, ensure_ascii=False),
@@ -126,7 +127,6 @@ def setup():
         )
         click.echo(f"Created config: {CONFIG_FILE}")
 
-    # Configure Claude Code settings
     claude_settings_path = Path.home() / ".claude" / "settings.json"
     if claude_settings_path.exists():
         settings = json.loads(claude_settings_path.read_text(encoding="utf-8"))
@@ -134,21 +134,24 @@ def setup():
         claude_settings_path.parent.mkdir(parents=True, exist_ok=True)
         settings = {}
 
-    # Add MCP server
     if "mcpServers" not in settings:
         settings["mcpServers"] = {}
-    settings["mcpServers"]["engram-ai"] = {
-        "command": "engram-ai",
-        "args": ["serve"],
-    }
 
-    # Write MCP server config first so _register_hooks can read it back
+    if use_uvx:
+        settings["mcpServers"]["engram-ai"] = {
+            "command": "uvx",
+            "args": ["engram-ai[mcp]"],
+        }
+    else:
+        settings["mcpServers"]["engram-ai"] = {
+            "command": "engram-ai",
+            "args": ["serve"],
+        }
+
     claude_settings_path.write_text(
         json.dumps(settings, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-
-    # Register hooks (reads, adds hooks, writes back)
     _register_hooks(claude_settings_path)
 
     click.echo(f"Updated Claude Code settings: {claude_settings_path}")

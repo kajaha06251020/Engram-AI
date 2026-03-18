@@ -71,3 +71,55 @@ def test_projects_list_with_data(tmp_path, monkeypatch):
     assert result.exit_code == 0
     assert "alpha" in result.output
     assert "beta" in result.output
+
+
+def test_setup_uvx_flag_writes_uvx_config(tmp_path, monkeypatch):
+    """setup --uvx writes uvx-based MCP server config."""
+    from click.testing import CliRunner
+    from engram_ai.cli import main
+    import json
+
+    fake_settings = tmp_path / ".claude" / "settings.json"
+    fake_settings.parent.mkdir(parents=True)
+    fake_config_dir = tmp_path / ".engram-ai"
+
+    monkeypatch.setattr("engram_ai.cli.CONFIG_DIR", fake_config_dir)
+    monkeypatch.setattr("engram_ai.cli.CONFIG_FILE", fake_config_dir / "config.json")
+
+    import pathlib
+    monkeypatch.setattr(pathlib.Path, "home", lambda: tmp_path)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["setup", "--uvx"])
+    assert result.exit_code == 0, result.output
+
+    settings = json.loads(fake_settings.read_text())
+    mcp = settings["mcpServers"]["engram-ai"]
+    assert mcp["command"] == "uvx"
+    assert "engram-ai[mcp]" in mcp["args"]
+
+
+def test_setup_default_writes_engram_serve_config(tmp_path, monkeypatch):
+    """setup (no flags) writes engram-ai serve config."""
+    from click.testing import CliRunner
+    from engram_ai.cli import main
+    import json
+
+    fake_settings = tmp_path / ".claude" / "settings.json"
+    fake_settings.parent.mkdir(parents=True)
+    fake_config_dir = tmp_path / ".engram-ai"
+
+    monkeypatch.setattr("engram_ai.cli.CONFIG_DIR", fake_config_dir)
+    monkeypatch.setattr("engram_ai.cli.CONFIG_FILE", fake_config_dir / "config.json")
+
+    import pathlib
+    monkeypatch.setattr(pathlib.Path, "home", lambda: tmp_path)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["setup"])
+    assert result.exit_code == 0, result.output
+
+    settings = json.loads(fake_settings.read_text())
+    mcp = settings["mcpServers"]["engram-ai"]
+    assert mcp["command"] == "engram-ai"
+    assert mcp["args"] == ["serve"]
