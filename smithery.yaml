@@ -1,0 +1,23 @@
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      storageDir:
+        type: string
+        title: Storage Directory
+        description: "Path to store Engram data (default: ~/.engram-ai/data)"
+      anthropicApiKey:
+        type: string
+        title: Anthropic API Key
+        description: "Optional. Enables LLM-powered valence detection and crystallization. Without it, keyword-based fallback is used."
+    required: []
+  commandFunction: |-
+    (config) => ({
+      command: "uvx",
+      args: ["engram-forge[mcp]", "serve"],
+      env: {
+        ...(config.storageDir ? { ENGRAM_AI_STORAGE: config.storageDir } : {}),
+        ...(config.anthropicApiKey ? { ANTHROPIC_API_KEY: config.anthropicApiKey } : {})
+      }
+    })
