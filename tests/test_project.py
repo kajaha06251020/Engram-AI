@@ -77,3 +77,11 @@ def test_backward_compat_old_layout(tmp_path, mock_llm):
     assert forge is not None
     # The default subdir should NOT be created
     assert not (tmp_path / "default").is_dir()
+
+
+def test_project_manager_works_without_llm(tmp_path):
+    """ProjectManager(base_path, config={}) works with llm defaulting to None."""
+    from engram_ai.project import ProjectManager
+    pm = ProjectManager(base_path=tmp_path, config={"default_project": "default"})
+    assert pm is not None
+    assert pm._llm is None

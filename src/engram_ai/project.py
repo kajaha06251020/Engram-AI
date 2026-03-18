@@ -14,11 +14,11 @@ _PROJECT_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 class ProjectManager:
     """Factory that manages per-project Forge instances."""
 
-    def __init__(self, base_path: Path, llm: BaseLLM, config: dict) -> None:
+    def __init__(self, base_path: Path, llm: BaseLLM | None = None, config: dict | None = None) -> None:
         self._base_path = Path(base_path)
         self._llm = llm
-        self._config = config
-        self._default_project = config.get("default_project", "default")
+        self._config = config or {}
+        self._default_project = self._config.get("default_project", "default")
         self._cache: dict[str, Forge] = {}
 
     def _validate_name(self, name: str) -> None:
