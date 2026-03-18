@@ -6,13 +6,16 @@ import pytest
 class TestClaudeLLMImportGuard:
     def test_raises_import_error_when_anthropic_missing(self, monkeypatch):
         """ClaudeLLM raises ImportError with install hint when anthropic not installed."""
-        monkeypatch.setitem(sys.modules, "anthropic", None)
-        # Need to reload the module with anthropic blocked
         import importlib
         import engram_ai.llm.claude as claude_mod
+        monkeypatch.setitem(sys.modules, "anthropic", None)
         importlib.reload(claude_mod)
-        with pytest.raises(ImportError, match="pip install engram-ai\\[claude\\]"):
-            claude_mod.ClaudeLLM()
+        try:
+            with pytest.raises(ImportError, match="pip install engram-ai\\[claude\\]"):
+                claude_mod.ClaudeLLM()
+        finally:
+            # Restore the module to its real state
+            importlib.reload(claude_mod)
 
     def test_works_when_anthropic_available(self):
         """ClaudeLLM instantiates normally when anthropic is installed."""
