@@ -39,7 +39,7 @@ if _FASTAPI_AVAILABLE:
         config_path: str = "./CLAUDE.md"
 
 
-def create_router(project_manager):
+def create_router():
     """Factory function that creates and returns the API router."""
     if not _FASTAPI_AVAILABLE:
         raise ImportError(
@@ -195,7 +195,7 @@ def create_router(project_manager):
     return router
 
 
-def create_ws_router(project_manager):
+def create_ws_router():
     """Factory function that creates and returns the WebSocket router."""
     if not _FASTAPI_AVAILABLE:
         raise ImportError(

@@ -17,7 +17,7 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 
 DEFAULT_CONFIG = {
     "storage_path": str(CONFIG_DIR / "data"),
-    "llm": {"provider": "claude", "model": "claude-sonnet-4-20250514"},
+    "llm": {"provider": "claude", "model": "claude-sonnet-4-6"},
     "crystallize": {"min_experiences": 3, "min_confidence": 0.7},
     "evolve": {"default_config_path": "./CLAUDE.md", "strategy": "append"},
     "default_project": "default",

@@ -31,6 +31,10 @@ class TestMCPImportGuard:
     def test_raises_import_error_when_mcp_missing(self, monkeypatch):
         """create_mcp_server raises ImportError with install hint when mcp not installed."""
         import importlib
+        import mcp as real_mcp
+        import mcp.server as real_mcp_server
+        import mcp.server.stdio as real_mcp_server_stdio
+        import mcp.types as real_mcp_types
         import engram_ai.mcp as mcp_mod
         monkeypatch.setitem(sys.modules, "mcp", None)
         monkeypatch.setitem(sys.modules, "mcp.server", None)
@@ -41,6 +45,11 @@ class TestMCPImportGuard:
             with pytest.raises(ImportError, match="pip install engram-ai\\[mcp\\]"):
                 mcp_mod.create_mcp_server(None)
         finally:
+            # Restore real mcp modules before reloading so _MCP_AVAILABLE is True
+            sys.modules["mcp"] = real_mcp
+            sys.modules["mcp.server"] = real_mcp_server
+            sys.modules["mcp.server.stdio"] = real_mcp_server_stdio
+            sys.modules["mcp.types"] = real_mcp_types
             importlib.reload(mcp_mod)
 
 
@@ -72,7 +81,7 @@ class TestDashboardImportGuard:
         importlib.reload(api_mod)
         try:
             with pytest.raises(ImportError, match="pip install engram-ai\\[dashboard\\]"):
-                api_mod.create_router(None)
+                api_mod.create_router()
         finally:
             importlib.reload(api_mod)
 
