@@ -6,8 +6,8 @@
 
 ### Experience-Driven Memory Infrastructure for AI Agents
 
-[![PyPI version](https://img.shields.io/pypi/v/engram-ai?style=flat-square&color=blue)](https://pypi.org/project/engram-ai/)
-[![Python](https://img.shields.io/pypi/pyversions/engram-ai?style=flat-square)](https://pypi.org/project/engram-ai/)
+[![PyPI version](https://img.shields.io/pypi/v/engram-forge?style=flat-square&color=blue)](https://pypi.org/project/engram-forge/)
+[![Python](https://img.shields.io/pypi/pyversions/engram-forge?style=flat-square)](https://pypi.org/project/engram-forge/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green?style=flat-square)](LICENSE)
 [![Tests](https://img.shields.io/github/actions/workflow/status/kajaha06251020/Engram-AI/tests.yml?style=flat-square&label=tests)](https://github.com/kajaha06251020/Engram-AI/actions)
 [![codecov](https://img.shields.io/codecov/c/github/kajaha06251020/Engram-AI?style=flat-square)](https://codecov.io/gh/kajaha06251020/Engram-AI)
@@ -70,7 +70,7 @@ Then skills **evolve** into the agent's configuration, making the agent permanen
 ### Installation
 
 ```bash
-pip install engram-ai
+pip install engram-forge
 ```
 
 ### As a Python Library
@@ -106,8 +106,8 @@ One command to set up automatic experience recording:
 
 ```bash
 # Install and configure
-pip install engram-ai
-engram-ai setup
+pip install engram-forge
+engram-forge setup
 
 # That's it! Engram-AI now:
 # 1. Records experiences via hooks (PostToolUse, UserPromptSubmit)
@@ -150,13 +150,13 @@ After setup, your Claude Code agent automatically:
 ## CLI Reference
 
 ```bash
-engram-ai setup          # Auto-configure for Claude Code
-engram-ai status         # Show experience/skill counts
-engram-ai query "topic"  # Search past experiences
-engram-ai crystallize    # Extract skills from experiences
-engram-ai evolve         # Write skills to CLAUDE.md
-engram-ai serve          # Start MCP server
-engram-ai dashboard      # Launch web dashboard (default: http://127.0.0.1:3333)
+engram-forge setup          # Auto-configure for Claude Code
+engram-forge status         # Show experience/skill counts
+engram-forge query "topic"  # Search past experiences
+engram-forge crystallize    # Extract skills from experiences
+engram-forge evolve         # Write skills to CLAUDE.md
+engram-forge serve          # Start MCP server
+engram-forge dashboard      # Launch web dashboard (default: http://127.0.0.1:3333)
 ```
 
 ## MCP Tools
@@ -204,7 +204,7 @@ Experiences ──► Cluster by similarity ──► LLM extracts pattern ─�
 Engram-AI includes a built-in real-time web dashboard for visualizing experiences, skills, and neural graphs.
 
 ```bash
-engram-ai dashboard --port 3333
+engram-forge dashboard --port 3333
 ```
 
 **4 pages:**

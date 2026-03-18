@@ -80,21 +80,21 @@ def _register_hooks(settings_path: Path) -> Path:
 
     engram_post_tool = {
         "matcher": "*",
-        "hooks": [{"type": "command", "command": "engram-ai hook post-tool-use"}],
+        "hooks": [{"type": "command", "command": "engram-forge hook post-tool-use"}],
     }
     engram_user_prompt = {
         "matcher": "",
-        "hooks": [{"type": "command", "command": "engram-ai hook user-prompt-submit"}],
+        "hooks": [{"type": "command", "command": "engram-forge hook user-prompt-submit"}],
     }
 
     if "PostToolUse" not in settings["hooks"]:
         settings["hooks"]["PostToolUse"] = []
-    if not any("engram-ai" in str(h) for h in settings["hooks"]["PostToolUse"]):
+    if not any("engram-forge" in str(h) for h in settings["hooks"]["PostToolUse"]):
         settings["hooks"]["PostToolUse"].append(engram_post_tool)
 
     if "UserPromptSubmit" not in settings["hooks"]:
         settings["hooks"]["UserPromptSubmit"] = []
-    if not any("engram-ai" in str(h) for h in settings["hooks"]["UserPromptSubmit"]):
+    if not any("engram-forge" in str(h) for h in settings["hooks"]["UserPromptSubmit"]):
         settings["hooks"]["UserPromptSubmit"].append(engram_user_prompt)
 
     settings_path.write_text(
@@ -138,13 +138,13 @@ def setup(use_uvx: bool):
         settings["mcpServers"] = {}
 
     if use_uvx:
-        settings["mcpServers"]["engram-ai"] = {
+        settings["mcpServers"]["engram-forge"] = {
             "command": "uvx",
-            "args": ["engram-ai[mcp]"],
+            "args": ["engram-forge[mcp]"],
         }
     else:
-        settings["mcpServers"]["engram-ai"] = {
-            "command": "engram-ai",
+        settings["mcpServers"]["engram-forge"] = {
+            "command": "engram-forge",
             "args": ["serve"],
         }
 
