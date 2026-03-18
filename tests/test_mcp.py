@@ -1,4 +1,5 @@
 import pytest
+pytest.importorskip("mcp", reason="mcp extra not installed: pip install engram-ai[mcp]")
 from mcp.types import CallToolRequest, CallToolRequestParams, ListToolsRequest
 
 from engram_ai.forge import Forge

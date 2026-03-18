@@ -81,8 +81,8 @@ def create_app(
         )
         app.state.raw_config = config
 
-    app.include_router(create_router(project_manager))
-    app.include_router(create_ws_router(project_manager))
+    app.include_router(create_router())
+    app.include_router(create_ws_router())
 
     static_dir = Path(__file__).parent / "static"
     if static_dir.exists() and any(static_dir.iterdir()):
