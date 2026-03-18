@@ -296,6 +296,21 @@ def serve():
     asyncio.run(run_mcp_server())
 
 
+@main.command("serve-http")
+@click.option("--host", default="0.0.0.0", help="Bind host")
+@click.option("--port", default=8000, type=int, help="Bind port")
+def serve_http(host, port):
+    """Start MCP server with HTTP transport (for cloud deployment)."""
+    import uvicorn
+
+    from engram_ai.mcp import create_http_app
+
+    port = int(os.environ.get("PORT", port))
+    app = create_http_app()
+    click.echo(f"Starting Engram-AI HTTP MCP server on {host}:{port}...")
+    uvicorn.run(app, host=host, port=port)
+
+
 @main.group()
 def hook():
     """Hook commands (called by Claude Code)."""

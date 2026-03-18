@@ -1,4 +1,8 @@
+import contextlib
+import json
 import logging
+import os
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -9,6 +13,27 @@ try:
     _MCP_AVAILABLE = True
 except ImportError:
     _MCP_AVAILABLE = False
+
+
+def _build_project_manager():
+    """Build a ProjectManager from config and env vars."""
+    from engram_ai.project import ProjectManager
+
+    config_dir = Path.home() / ".engram-ai"
+    config_file = config_dir / "config.json"
+    config = {}
+    if config_file.exists():
+        config = json.loads(config_file.read_text(encoding="utf-8"))
+    base_path = Path(os.environ.get(
+        "ENGRAM_AI_STORAGE",
+        config.get("storage_path", str(config_dir / "data")),
+    ))
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    llm = None
+    if api_key:
+        from engram_ai.llm.claude import ClaudeLLM
+        llm = ClaudeLLM(api_key=api_key)
+    return ProjectManager(base_path=base_path, llm=llm, config=config)
 
 
 def create_mcp_server(project_manager):
@@ -316,23 +341,45 @@ async def run_mcp_server():
             "mcp package is required for MCP server. "
             "Install it with: pip install engram-ai[mcp]"
         )
-    import json
-    import os
-    from pathlib import Path
-    from engram_ai.project import ProjectManager
-
-    config_dir = Path.home() / ".engram-ai"
-    config_file = config_dir / "config.json"
-    config = {}
-    if config_file.exists():
-        config = json.loads(config_file.read_text(encoding="utf-8"))
-    base_path = Path(os.environ.get("ENGRAM_AI_STORAGE", config.get("storage_path", str(config_dir / "data"))))
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    llm = None
-    if api_key:
-        from engram_ai.llm.claude import ClaudeLLM
-        llm = ClaudeLLM(api_key=api_key)
-    pm = ProjectManager(base_path=base_path, llm=llm, config=config)
+    pm = _build_project_manager()
     server = create_mcp_server(pm)
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream)
+
+
+def create_http_app():
+    """Create a Starlette ASGI app with MCP Streamable HTTP transport."""
+    if not _MCP_AVAILABLE:
+        raise ImportError(
+            "mcp package is required for MCP server. "
+            "Install it with: pip install engram-ai[mcp]"
+        )
+    from starlette.applications import Starlette
+    from starlette.responses import JSONResponse
+    from starlette.routing import Route
+    from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+
+    pm = _build_project_manager()
+    server = create_mcp_server(pm)
+    session_manager = StreamableHTTPSessionManager(app=server)
+
+    async def health(request):
+        return JSONResponse({"status": "ok"})
+
+    class _McpEndpoint:
+        """ASGI wrapper — avoids Starlette's function introspection."""
+        async def __call__(self, scope, receive, send):
+            await session_manager.handle_request(scope, receive, send)
+
+    @contextlib.asynccontextmanager
+    async def lifespan(app):
+        async with session_manager.run():
+            yield
+
+    return Starlette(
+        routes=[
+            Route("/health", health),
+            Route("/mcp", endpoint=_McpEndpoint()),
+        ],
+        lifespan=lifespan,
+    )
