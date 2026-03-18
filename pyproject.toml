@@ -1,28 +1,28 @@
 [project]
 name = "engram-ai"
-version = "0.3.0"
+version = "0.4.0"
 description = "Experience-driven memory infrastructure for AI agents"
 license = "Apache-2.0"
 requires-python = ">=3.10"
 keywords = ["ai", "agent", "memory", "experience", "learning"]
 
 dependencies = [
-    "anthropic>=0.40.0",
     "chromadb>=0.5.0",
     "click>=8.0.0",
     "pydantic>=2.0.0",
-    "mcp>=1.0.0",
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.30.0",
 ]
 
 [project.optional-dependencies]
+mcp = ["mcp>=1.0.0"]
+claude = ["anthropic>=0.40.0"]
+dashboard = ["fastapi>=0.115.0", "uvicorn[standard]>=0.30.0"]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "ruff>=0.8.0",
     "httpx>=0.27.0",
 ]
+full = ["engram-ai[mcp,claude,dashboard]"]
 
 [project.scripts]
 engram-ai = "engram_ai.cli:main"
