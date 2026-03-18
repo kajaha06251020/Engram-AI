@@ -8,11 +8,15 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+try:
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.staticfiles import StaticFiles
+    _FASTAPI_AVAILABLE = True
+except ImportError:
+    _FASTAPI_AVAILABLE = False
 
-from engram_ai.dashboard.api import router, ws_router
+from engram_ai.dashboard.api import create_router, create_ws_router
 from engram_ai.project import ProjectManager
 from engram_ai.scheduler import Scheduler, SchedulerConfig
 
@@ -23,10 +27,15 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 
 
 def create_app(
-    project_manager: ProjectManager | None = None,
-    scheduler_config: SchedulerConfig | None = None,
-) -> FastAPI:
+    project_manager: "ProjectManager | None" = None,
+    scheduler_config: "SchedulerConfig | None" = None,
+) -> "FastAPI":
     """Create and configure the dashboard FastAPI application."""
+    if not _FASTAPI_AVAILABLE:
+        raise ImportError(
+            "fastapi package is required for the dashboard. "
+            "Install it with: pip install engram-ai[dashboard]"
+        )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -72,8 +81,8 @@ def create_app(
         )
         app.state.raw_config = config
 
-    app.include_router(router)
-    app.include_router(ws_router)
+    app.include_router(create_router(project_manager))
+    app.include_router(create_ws_router(project_manager))
 
     static_dir = Path(__file__).parent / "static"
     if static_dir.exists() and any(static_dir.iterdir()):
