@@ -14,7 +14,7 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json&style=flat-square)](https://github.com/astral-sh/ruff)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](../../CONTRIBUTING.md)
 [![GitHub Stars](https://img.shields.io/github/stars/kajaha06251020/Engram-AI?style=flat-square)](https://github.com/kajaha06251020/Engram-AI/stargazers)
-[![Discord](https://img.shields.io/badge/Discord-join%20chat-7289DA?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/engram-ai)
+[![Discord](https://img.shields.io/badge/Discord-join%20chat-7289DA?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/hGAcEfKqgq)
 
 **[English](../../README.md)** | **[日本語](README_ja.md)** | **[中文](README_zh.md)** | **한국어** | **[Español](README_es.md)**
 
@@ -259,7 +259,7 @@ pytest
 ## 커뮤니티
 
 - [GitHub Discussions](https://github.com/kajaha06251020/Engram-AI/discussions) — 질문, 아이디어, 작업 공유
-- [Discord](https://discord.gg/engram-ai) — 실시간 채팅
+- [Discord](https://discord.gg/hGAcEfKqgq) — 실시간 채팅
 - [Issues](https://github.com/kajaha06251020/Engram-AI/issues) — 버그 신고 및 기능 요청
 
 ## 스타 히스토리
