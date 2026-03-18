@@ -25,3 +25,20 @@ class TestClaudeLLMImportGuard:
             assert llm is not None
         except ImportError:
             pytest.skip("anthropic not installed")
+
+
+class TestMCPImportGuard:
+    def test_raises_import_error_when_mcp_missing(self, monkeypatch):
+        """create_mcp_server raises ImportError with install hint when mcp not installed."""
+        import importlib
+        import engram_ai.mcp as mcp_mod
+        monkeypatch.setitem(sys.modules, "mcp", None)
+        monkeypatch.setitem(sys.modules, "mcp.server", None)
+        monkeypatch.setitem(sys.modules, "mcp.server.stdio", None)
+        monkeypatch.setitem(sys.modules, "mcp.types", None)
+        importlib.reload(mcp_mod)
+        try:
+            with pytest.raises(ImportError, match="pip install engram-ai\\[mcp\\]"):
+                mcp_mod.create_mcp_server(None)
+        finally:
+            importlib.reload(mcp_mod)
