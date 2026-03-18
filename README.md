@@ -15,6 +15,7 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
 [![GitHub Stars](https://img.shields.io/github/stars/kajaha06251020/Engram-AI?style=flat-square)](https://github.com/kajaha06251020/Engram-AI/stargazers)
 [![Discord](https://img.shields.io/badge/Discord-join%20chat-7289DA?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/hGAcEfKqgq)
+[![Smithery](https://smithery.ai/badge/@kajaha06251020/engram-forge)](https://smithery.ai/server/@kajaha06251020/engram-forge)
 
 **[English](#what-is-engram-ai)** | **[日本語](docs/i18n/README_ja.md)** | **[中文](docs/i18n/README_zh.md)** | **[한국어](docs/i18n/README_ko.md)** | **[Español](docs/i18n/README_es.md)**
 
@@ -32,10 +33,9 @@
 - [Why Engram-AI?](#why-engram-ai)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
-- [Sample Programs](#sample-programs)
+- [MCP Server](#mcp-server)
 - [API Reference](#api-reference)
 - [CLI Reference](#cli-reference)
-- [MCP Server](#mcp-server)
 - [Without an Anthropic API Key](#without-an-anthropic-api-key)
 - [Multi-Project Support](#multi-project-support)
 - [Architecture](#architecture)
@@ -159,201 +159,6 @@ if record:
 
 ---
 
-## Sample Programs
-
-The [`examples/`](examples/) directory contains ready-to-run scripts.
-
-### 1 · Basic record / query / crystallize / evolve
-
-```python
-# examples/01_basic.py
-from engram_ai import Forge
-
-forge = Forge(storage_path="/tmp/engram-demo")
-
-# --- Record a few experiences ---
-pairs = [
-    ("Used f-strings for formatting",     "Writing Python utility script",      "Readable and fast",          0.8),
-    ("Used % formatting for strings",     "Writing Python utility script",      "Hard to read, user rewrote", -0.7),
-    ("Used f-strings in log messages",    "Adding debug logging to API server", "Clear output, approved",     0.9),
-    ("Used str.format() in log messages", "Adding debug logging to API server", "Verbose, asked to simplify", -0.5),
-]
-for action, context, outcome, valence in pairs:
-    forge.record(action=action, context=context, outcome=outcome, valence=valence)
-
-# --- Query ---
-print("=== Query: string formatting ===")
-result = forge.query("string formatting in Python", k=3)
-for exp, score in result["best"]:
-    print(f"  DO    [{score:.2f}]  {exp.action}")
-for exp, score in result["avoid"]:
-    print(f"  AVOID [{score:.2f}]  {exp.action}")
-
-# --- Crystallize ---
-print("\n=== Skills ===")
-skills = forge.crystallize(min_experiences=2, min_confidence=0.5)
-for skill in skills:
-    print(f"  {skill.rule}  (confidence={skill.confidence:.2f})")
-
-# --- Evolve ---
-forge.evolve(config_path="/tmp/AGENT.md")
-print("\nWrote skills to /tmp/AGENT.md")
-```
-
-### 2 · Teach a rule directly (no experiences needed)
-
-```python
-# examples/02_teach.py
-from engram_ai import Forge
-
-forge = Forge(storage_path="/tmp/engram-teach")
-
-# Directly inject a known rule — useful for bootstrapping
-skill = forge.teach(
-    rule="Always validate user input at the API boundary",
-    context_pattern="handling HTTP requests",
-    skill_type="positive",
-    confidence=0.95,
-)
-print(f"Taught: {skill.rule}")
-
-# Teach an anti-pattern
-anti = forge.teach(
-    rule="Never use eval() on user-supplied strings",
-    context_pattern="executing dynamic code",
-    skill_type="anti",
-    confidence=1.0,
-)
-print(f"Anti-pattern: {anti.rule}")
-```
-
-### 3 · Warn before a risky action
-
-```python
-# examples/03_warn.py
-from engram_ai import Forge
-
-forge = Forge(storage_path="/tmp/engram-warn")
-
-# Seed some past failures
-forge.record(
-    action="Ran DELETE without WHERE clause",
-    context="Database cleanup script",
-    outcome="Wiped entire table — had to restore from backup",
-    valence=-1.0,
-)
-forge.record(
-    action="Executed raw SQL from user input",
-    context="Search feature implementation",
-    outcome="SQL injection vulnerability found in review",
-    valence=-0.9,
-)
-
-# Before executing a new action, check for past failures
-warnings = forge.warn(
-    action="Run DELETE query on production database",
-    context="Database maintenance",
-    threshold=0.5,
-)
-if warnings:
-    print("WARNING — past issues with similar actions:")
-    for w in warnings:
-        print(f"  [{w.valence:.1f}] {w.outcome}")
-else:
-    print("No past issues found.")
-```
-
-### 4 · Multi-project management
-
-```python
-# examples/04_multi_project.py
-from pathlib import Path
-from engram_ai import Forge, ProjectManager
-
-pm = ProjectManager(base_path=Path("/tmp/engram-projects"))
-
-# Each project has its own isolated memory
-frontend = pm.get_forge("frontend")
-backend  = pm.get_forge("backend")
-
-frontend.record(
-    action="Used Tailwind utility classes for layout",
-    context="Building responsive card component",
-    outcome="Fast iteration, designer approved",
-    valence=0.85,
-)
-
-backend.record(
-    action="Used SQLAlchemy ORM for complex join",
-    context="Dashboard query with 5 tables",
-    outcome="N+1 query issue — rewrote with raw SQL",
-    valence=-0.6,
-)
-
-print("Projects:", pm.list_projects())   # ['backend', 'frontend']
-
-fe_skills = frontend.crystallize(min_experiences=1, min_confidence=0.5)
-print(f"Frontend skills: {len(fe_skills)}")
-```
-
-### 5 · Use without an Anthropic API key
-
-```python
-# examples/05_no_api_key.py
-# Core features work with keyword-based valence and clustering.
-# No API key, no anthropic package required — just: pip install engram-forge
-from engram_ai.llm.base import BaseLLM
-from engram_ai import Forge
-
-class NoLLM(BaseLLM):
-    """Stub LLM — disables LLM-powered features."""
-    def generate(self, prompt: str) -> str:
-        raise NotImplementedError
-    def extract_experience(self, messages: list) -> dict | None:
-        return None
-
-forge = Forge(llm=NoLLM(), storage_path="/tmp/engram-nokey")
-
-forge.record(
-    action="Used pytest fixtures for test setup",
-    context="Writing integration tests",
-    outcome="Tests are clean and reusable — great",
-    valence=0.8,
-)
-
-result = forge.query("testing patterns")
-print("best:", [(e.action, s) for e, s in result["best"]])
-
-# crystallize() falls back to keyword clustering (no LLM call)
-skills = forge.crystallize(min_experiences=1, min_confidence=0.4)
-print("skills:", [s.rule for s in skills])
-```
-
-### 6 · Observe a conversation and auto-record
-
-```python
-# examples/06_observe.py  — requires pip install "engram-forge[claude]"
-from engram_ai import Forge
-
-forge = Forge()   # uses ANTHROPIC_API_KEY from env
-
-messages = [
-    {"role": "user",      "content": "Can you refactor this function to use a generator?"},
-    {"role": "assistant", "content": "Sure — here's the generator version..."},
-    {"role": "user",      "content": "Perfect, much cleaner. Thanks!"},
-]
-
-result = forge.observe(messages, max_turns=3, crystallize_threshold=5)
-if result["recorded"]:
-    print(f"Recorded: {result['recorded'].action}")
-if result["crystallized"]:
-    print(f"New skills: {[s.rule for s in result['crystallized']]}")
-```
-
-> See [`examples/`](examples/) for all runnable scripts.
-
----
-
 ## API Reference
 
 ### `Forge` — Main Entry Point
@@ -434,7 +239,7 @@ engram-forge -p backend crystallize
 
 ## MCP Server
 
-When running as an MCP server (`engram-forge serve`), all 10 tools are available to any MCP-compatible client:
+Engram-AI exposes 10 MCP tools to any MCP-compatible client (Claude Code, Cursor, etc.):
 
 | Tool | Key Inputs | Output |
 |------|-----------|--------|
@@ -449,10 +254,41 @@ When running as an MCP server (`engram-forge serve`), all 10 tools are available
 | `engram_merge` | skill_a_id, skill_b_id, project? | Merged Skill |
 | `engram_decay` | project? | Updated skills list |
 
-**Claude Code registration** (done automatically by `engram-forge setup`):
+### Option 1 — Via Smithery (no install required)
+
+The easiest way to use Engram-AI as an MCP server. No local installation needed — the server runs in the cloud.
+
+**Install via Smithery CLI:**
+
+```bash
+npx @smithery/cli install @kajaha06251020/engram-forge --client claude
+```
+
+Or add it manually to `~/.claude/settings.json`:
 
 ```json
-// ~/.claude/settings.json
+{
+  "mcpServers": {
+    "engram-forge": {
+      "transport": "http",
+      "url": "https://engram-forge.onrender.com/mcp"
+    }
+  }
+}
+```
+
+Browse the server on Smithery: [smithery.ai/server/@kajaha06251020/engram-forge](https://smithery.ai/server/@kajaha06251020/engram-forge)
+
+### Option 2 — Local install (stdio)
+
+```bash
+pip install "engram-forge[mcp]"
+engram-forge setup    # auto-writes MCP config + hooks to ~/.claude/settings.json
+```
+
+Or add manually:
+
+```json
 {
   "mcpServers": {
     "engram-forge": {
@@ -463,7 +299,7 @@ When running as an MCP server (`engram-forge serve`), all 10 tools are available
 }
 ```
 
-**Or with uvx (no pip install required):**
+### Option 3 — With uvx (no pip install)
 
 ```bash
 engram-forge setup --uvx
@@ -581,22 +417,6 @@ Experiences ──► Cluster by similarity ──► Extract pattern ──► 
 
 ---
 
-## How It Works — End-to-End Example
-
-```
-Day 1  forge.record("Used Optional[str]", "API design", "Rejected by user", -0.8)
-Day 2  forge.record("Used Optional[str]", "Config model", "User said avoid nulls", -0.7)
-Day 3  forge.record("Used str | None",    "API design", "Accepted — modern style", 0.6)
-       ↓ crystallize()
-       Skill: "Avoid Optional[str] in models — use 'X | None' syntax"  confidence=0.72
-       ↓ evolve("CLAUDE.md")
-       → CLAUDE.md updated with learned rule
-Day 4  forge.query("API response model design")
-       → best: ["Used str | None …"]  avoid: ["Used Optional[str] …"]
-```
-
----
-
 ## Web Dashboard
 
 ```bash
@@ -661,14 +481,6 @@ Check out [good first issues](https://github.com/kajaha06251020/Engram-AI/issues
 - [Issues](https://github.com/kajaha06251020/Engram-AI/issues) — Bug reports and feature requests
 
 ---
-
-## Star History
-
-<div align="center">
-
-[![Star History Chart](https://api.star-history.com/svg?repos=kajaha06251020/Engram-AI&type=Date)](https://star-history.com/#kajaha06251020/Engram-AI&Date)
-
-</div>
 
 ## License
 
