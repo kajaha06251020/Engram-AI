@@ -91,9 +91,9 @@ def test_setup_hooks_command(tmp_path, monkeypatch):
     assert "UserPromptSubmit" in settings["hooks"]
     # Verify engram-ai hooks are present
     post_tool_hooks = settings["hooks"]["PostToolUse"]
-    assert any("engram-ai" in str(h) for h in post_tool_hooks)
+    assert any("engram-forge" in str(h) for h in post_tool_hooks)
     user_prompt_hooks = settings["hooks"]["UserPromptSubmit"]
-    assert any("engram-ai" in str(h) for h in user_prompt_hooks)
+    assert any("engram-forge" in str(h) for h in user_prompt_hooks)
 
 
 def test_setup_hooks_idempotent(tmp_path, monkeypatch):
@@ -109,8 +109,8 @@ def test_setup_hooks_idempotent(tmp_path, monkeypatch):
     settings_path = fake_home / ".claude" / "settings.json"
     settings = json.loads(settings_path.read_text(encoding="utf-8"))
     # Should have exactly 1 engram-ai entry per hook type
-    post_tool = [h for h in settings["hooks"]["PostToolUse"] if "engram-ai" in str(h)]
-    user_prompt = [h for h in settings["hooks"]["UserPromptSubmit"] if "engram-ai" in str(h)]
+    post_tool = [h for h in settings["hooks"]["PostToolUse"] if "engram-forge" in str(h)]
+    user_prompt = [h for h in settings["hooks"]["UserPromptSubmit"] if "engram-forge" in str(h)]
     assert len(post_tool) == 1
     assert len(user_prompt) == 1
 
@@ -138,7 +138,7 @@ def test_setup_hooks_preserves_existing(tmp_path, monkeypatch):
     # Should have both the existing and engram-ai hooks
     assert len(settings["hooks"]["PostToolUse"]) == 2
     assert any("my-tool" in str(h) for h in settings["hooks"]["PostToolUse"])
-    assert any("engram-ai" in str(h) for h in settings["hooks"]["PostToolUse"])
+    assert any("engram-forge" in str(h) for h in settings["hooks"]["PostToolUse"])
 
 
 def test_hook_user_prompt_submit_recall(tmp_path, monkeypatch):

@@ -94,9 +94,9 @@ def test_setup_uvx_flag_writes_uvx_config(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
 
     settings = json.loads(fake_settings.read_text())
-    mcp = settings["mcpServers"]["engram-ai"]
+    mcp = settings["mcpServers"]["engram-forge"]
     assert mcp["command"] == "uvx"
-    assert "engram-ai[mcp]" in mcp["args"]
+    assert "engram-forge[mcp]" in mcp["args"]
 
 
 def test_setup_default_writes_engram_serve_config(tmp_path, monkeypatch):
@@ -120,6 +120,6 @@ def test_setup_default_writes_engram_serve_config(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
 
     settings = json.loads(fake_settings.read_text())
-    mcp = settings["mcpServers"]["engram-ai"]
-    assert mcp["command"] == "engram-ai"
+    mcp = settings["mcpServers"]["engram-forge"]
+    assert mcp["command"] == "engram-forge"
     assert mcp["args"] == ["serve"]
