@@ -1,4 +1,5 @@
 import pytest
+pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 from engram_ai.dashboard.server import create_app

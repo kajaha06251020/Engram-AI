@@ -162,7 +162,7 @@ class TestKeywordFallback:
         for action in actions:
             exp = Experience(
                 action=action,
-                context=f"writing Python unit tests with pytest framework",
+                context="writing Python unit tests with pytest framework",
                 outcome="tests pass successfully",
                 valence=0.9,
             )

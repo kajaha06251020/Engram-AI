@@ -171,11 +171,11 @@ def test_teach_invalid_skill_type(tmp_path, mock_llm):
 
 def test_teach_reinforces_similar(tmp_path, mock_llm):
     forge = Forge(storage_path=str(tmp_path / "data"), llm=mock_llm)
-    skill1 = forge.teach(
+    forge.teach(
         rule="Use parameterized queries for SQL",
         context_pattern="database access",
     )
-    skill2 = forge.teach(
+    forge.teach(
         rule="Always use parameterized queries for SQL injection prevention",
         context_pattern="database access",
     )
