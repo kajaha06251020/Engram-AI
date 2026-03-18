@@ -130,3 +130,22 @@ class TestForgeWithoutAnthropic:
         forge = Forge(llm=MockLLM(), storage_path=str(tmp_path))
         assert hasattr(forge, "_check_skill_effectiveness")
         assert not hasattr(forge, "check_skill_effectiveness")
+
+
+class TestPublicAPI:
+    def test_query_result_importable(self):
+        from engram_ai import QueryResult
+        assert QueryResult is not None
+
+    def test_all_exports_present(self):
+        import engram_ai
+        for name in ["Forge", "Experience", "Skill", "ProjectManager", "QueryResult"]:
+            assert hasattr(engram_ai, name), f"Missing export: {name}"
+
+    def test_base_storage_importable_from_submodule(self):
+        from engram_ai.storage import BaseStorage
+        assert BaseStorage is not None
+
+    def test_base_llm_importable_from_submodule(self):
+        from engram_ai.llm import BaseLLM
+        assert BaseLLM is not None
