@@ -1,6 +1,10 @@
 import json
 import logging
-import anthropic
+try:
+    import anthropic
+except ImportError:
+    anthropic = None  # type: ignore[assignment]
+
 from engram_ai.exceptions import LLMError
 from engram_ai.llm.base import BaseLLM
 from engram_ai.models.experience import Experience
@@ -10,7 +14,12 @@ logger = logging.getLogger(__name__)
 
 class ClaudeLLM(BaseLLM):
     """Claude API implementation for Engram-AI LLM operations."""
-    def __init__(self, api_key: str | None = None, model: str = "claude-sonnet-4-20250514"):
+    def __init__(self, api_key: str | None = None, model: str = "claude-sonnet-4-6"):
+        if anthropic is None:
+            raise ImportError(
+                "anthropic package is required for ClaudeLLM. "
+                "Install it with: pip install engram-ai[claude]"
+            )
         try:
             self._client = anthropic.Anthropic(api_key=api_key)
         except Exception as e:
