@@ -39,7 +39,9 @@ Required dependencies only:
 | `claude` | `pip install engram-ai[claude]` | `anthropic>=0.40.0` | External app AI processing |
 | `dashboard` | `pip install engram-ai[dashboard]` | `fastapi>=0.115.0`, `uvicorn[standard]>=0.30.0` | Web UI |
 | `dev` | `pip install engram-ai[dev]` | `pytest`, `pytest-asyncio`, `ruff`, `httpx` | Development tools |
-| `full` | `pip install engram-ai[full]` | All of the above | Everything |
+| `full` | `pip install engram-ai[full]` | mcp + claude + dashboard (not dev) | Everything except dev tools |
+
+Note: `dev` is intentionally excluded from `full`. Use `pip install engram-ai[full,dev]` for development.
 
 ### Capabilities Without Extras
 
@@ -48,10 +50,12 @@ Required dependencies only:
 | `forge.record()` | ✅ keyword valence | ✅ LLM valence | ✅ |
 | `forge.query()` | ✅ ChromaDB search | ✅ | ✅ |
 | `forge.teach()` | ✅ | ✅ | ✅ |
-| `forge.crystallize()` | ⚠️ keyword clusters only | ✅ LLM patterns | ✅ |
+| `forge.crystallize()` | ⚠️ keyword clusters only (requires implementation) | ✅ LLM patterns | ✅ |
 | `forge.evolve()` | ✅ writes CLAUDE.md | ✅ | ✅ |
 | `forge.observe()` | ❌ requires LLM | ✅ | ✅ (via Claude Code) |
 | MCP server | ❌ | ❌ | ✅ |
+
+Note: Core-only keyword clustering for `crystallize()` requires a new `KeywordCrystallizer` fallback implementation.
 
 ---
 
@@ -67,6 +71,7 @@ from engram_ai import ProjectManager  # Multi-project management
 # Data models (returned by Forge methods)
 from engram_ai import Experience
 from engram_ai import Skill
+from engram_ai import QueryResult     # Return type of forge.query() / forge.recall()
 
 # Extension points (for custom storage/LLM implementations)
 from engram_ai.storage import BaseStorage
@@ -75,19 +80,23 @@ from engram_ai.llm import BaseLLM
 
 ### Forge Public Methods
 
+Note: `project?` parameter shown in the MCP tools table is a routing parameter handled by `ProjectManager`, not a native `Forge` method parameter. Individual `Forge` instances are project-scoped.
+
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `record` | `(action, context, outcome, valence?, project?) -> Experience` | Record an experience |
-| `query` | `(context, k=5, project?) -> QueryResult` | Search past experiences |
-| `crystallize` | `(min_experiences=3, min_confidence=0.7, project?) -> list[Skill]` | Extract skill patterns |
-| `evolve` | `(config_path, project?) -> str` | Write skills to agent config |
-| `teach` | `(rule, context_pattern, skill_type, confidence, project?) -> Skill` | Directly register a skill |
-| `warn` | `(context, project?) -> list[Skill]` | Find similar skills as warnings |
-| `observe` | `(messages, max_turns=3, project?) -> dict` | Auto-record from conversation |
-| `status` | `(project?) -> dict` | Statistics summary |
-| `detect_conflicts` | `(project?) -> list` | Find conflicting skills |
-| `merge_skills` | `(skill_a_id, skill_b_id, project?) -> Skill` | Merge two skills |
-| `apply_decay` | `(project?) -> list[Skill]` | Apply time-based confidence decay |
+| `record` | `(action, context, outcome, valence: float) -> Experience` | Record an experience (valence required) |
+| `query` | `(context, k=5) -> QueryResult` | Search past experiences |
+| `crystallize` | `(min_experiences=3, min_confidence=0.7) -> list[Skill]` | Extract skill patterns |
+| `evolve` | `(config_path) -> EvolutionRecord \| None` | Write skills to agent config |
+| `teach` | `(rule, context_pattern, skill_type, confidence) -> Skill` | Directly register a skill |
+| `warn` | `(action, context, threshold=0.6) -> list[Experience]` | Find negative past experiences as warnings |
+| `observe` | `(messages, max_turns=3, crystallize_threshold=5) -> dict` | Auto-record from conversation |
+| `status` | `() -> dict` | Statistics summary |
+| `detect_conflicts` | `() -> list` | Find conflicting skills |
+| `merge_skills` | `(skill_a_id, skill_b_id) -> Skill` | Merge two skills |
+| `apply_decay` | `() -> list[Skill]` | Apply time-based confidence decay |
+
+Methods `recall()` and `check_skill_effectiveness()` exist in the current implementation but are used internally by hooks. These will be prefixed `_` to signal internal use.
 
 ### Internal (Subject to Change Without Notice)
 
@@ -104,12 +113,13 @@ engram_ai.events.*     # EventBus, event constants
 
 ### Installation Methods (Both Supported)
 
-**Method A: uvx (no install required)**
+**Method A: uvx (no install required, ephemeral)**
 ```bash
-uvx engram-ai[mcp]
+# Note: quote the extras argument if your shell requires it
+uvx "engram-ai[mcp]"
 ```
 
-**Method B: pip install + CLI**
+**Method B: pip install + CLI (recommended for regular use)**
 ```bash
 pip install engram-ai[mcp]
 engram-ai serve
@@ -117,15 +127,28 @@ engram-ai serve
 
 ### Claude Code Registration (`engram-ai setup` auto-configures)
 
-The `engram-ai setup` command automatically adds to `~/.claude/settings.json`:
+The `engram-ai setup` command automatically adds to `~/.claude/settings.json`.
+Default uses `engram-ai serve` (pip-installed path):
+
+```json
+{
+  "mcpServers": {
+    "engram-ai": {
+      "command": "engram-ai",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+A `--uvx` boolean flag (`is_flag=True`) enables the uvx path for users who prefer not to pip install:
 
 ```json
 {
   "mcpServers": {
     "engram-ai": {
       "command": "uvx",
-      "args": ["engram-ai[mcp]"],
-      "env": {}
+      "args": ["engram-ai[mcp]"]
     }
   }
 }
@@ -135,11 +158,11 @@ The `engram-ai setup` command automatically adds to `~/.claude/settings.json`:
 
 | Tool | Input | Output |
 |------|-------|--------|
-| `engram_record` | action, context, outcome, valence?, project? | Experience ID |
+| `engram_record` | action, context, outcome, valence, project? | Experience ID |
 | `engram_query` | context, k=5, project? | `{best: [...], avoid: [...]}` |
 | `engram_crystallize` | min_experiences=3, min_confidence=0.7, project? | Skill list |
 | `engram_evolve` | config_path, project? | Evolution diff string |
-| `engram_observe` | messages, max_turns=3, project? | `{recorded, crystallized}` |
+| `engram_observe` | messages, max_turns=3, crystallize_threshold=5, project? | `{recorded, crystallized}` |
 | `engram_teach` | rule, context_pattern, skill_type, confidence, project? | Skill object |
 | `engram_status` | project? | Stats dict |
 | `engram_conflicts` | project? | Skill pair list |
@@ -152,7 +175,7 @@ When `ANTHROPIC_API_KEY` is not set:
 - `engram_record`: uses keyword-based valence detection
 - `engram_query`: returns ChromaDB vector search results
 - `engram_crystallize`: returns keyword-clustered patterns only (degraded quality)
-- `engram_observe`: **disabled** (requires LLM), returns error with clear message
+- `engram_observe`: **partially disabled** — the record sub-step runs in keyword-valence mode, but the LLM extraction step fails; the whole tool returns an error with a clear message (`pip install engram-ai[claude]`) rather than partially recording
 - All other tools: fully functional
 
 ---
@@ -179,7 +202,7 @@ ENGRAM_AI_STORAGE=/custom/path engram-ai serve
   "storage_path": "~/.engram-ai/data",
   "llm": {
     "provider": "claude",
-    "model": "claude-opus-4-6"
+    "model": "claude-sonnet-4-6"
   },
   "crystallize": {
     "min_experiences": 3,
@@ -218,10 +241,13 @@ full = ["engram-ai[mcp,claude,dashboard]"]
 | File | Change |
 |------|--------|
 | `pyproject.toml` | Move `anthropic`, `mcp`, `fastapi`, `uvicorn` to optional extras |
-| `src/engram_ai/__init__.py` | Add `BaseStorage`, `BaseLLM` to public exports |
-| `src/engram_ai/llm/claude.py` | Guard import: `anthropic` only imported if installed |
-| `src/engram_ai/mcp.py` | Guard import: `mcp` only imported if installed |
-| `src/engram_ai/dashboard/server.py` | Guard import: `fastapi` only imported if installed |
-| `src/engram_ai/cli.py` | `setup` command writes MCP config with `uvx` args |
-| `src/engram_ai/core/recorder.py` | Graceful fallback when LLM not available |
-| `src/engram_ai/core/crystallizer.py` | Graceful fallback to keyword clustering |
+| `src/engram_ai/__init__.py` | Add `BaseStorage`, `BaseLLM` to public exports; add `QueryResult` (currently in `engram_ai.core.querier`) to public exports |
+| `src/engram_ai/forge.py` | Lazy import `ClaudeLLM` (only when `anthropic` installed); `Forge.__init__` defaults `llm` to `None` when `anthropic` not installed — raises `ImportError` with install hint (`pip install engram-ai[claude]`) at construction time if `anthropic` is absent and no `llm` is passed; rename `recall` → `_recall`, `check_skill_effectiveness` → `_check_skill_effectiveness` |
+| `src/engram_ai/project.py` | Change `llm: BaseLLM` to `llm: BaseLLM \| None = None` in `__init__` signature |
+| `src/engram_ai/llm/claude.py` | Guard: raise `ImportError` with install hint if `anthropic` not installed |
+| `src/engram_ai/mcp.py` | Guard: raise `ImportError` with install hint if `mcp` not installed |
+| `src/engram_ai/dashboard/server.py` | Guard: raise `ImportError` with install hint if `fastapi` not installed |
+| `src/engram_ai/dashboard/api.py` | Guard: raise `ImportError` with install hint if `fastapi` not installed |
+| `src/engram_ai/cli.py` | `setup` command writes `engram-ai serve` by default; add `--uvx` flag for uvx path |
+| `src/engram_ai/core/recorder.py` | Graceful fallback when `llm` is `None` (keyword valence) |
+| `src/engram_ai/core/crystallizer.py` | Add `KeywordCrystallizer` fallback; use when `llm` is `None` |
