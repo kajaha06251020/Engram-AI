@@ -1,14 +1,23 @@
 import logging
 
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
-
 logger = logging.getLogger(__name__)
 
+try:
+    from mcp.server import Server
+    from mcp.server.stdio import stdio_server
+    from mcp.types import TextContent, Tool
+    _MCP_AVAILABLE = True
+except ImportError:
+    _MCP_AVAILABLE = False
 
-def create_mcp_server(project_manager) -> Server:
+
+def create_mcp_server(project_manager):
     """Create an MCP server exposing Engram-AI tools."""
+    if not _MCP_AVAILABLE:
+        raise ImportError(
+            "mcp package is required for MCP server. "
+            "Install it with: pip install engram-ai[mcp]"
+        )
     server = Server("engram-ai")
 
     @server.list_tools()
@@ -302,6 +311,11 @@ def create_mcp_server(project_manager) -> Server:
 
 async def run_mcp_server():
     """Run the MCP server on stdio."""
+    if not _MCP_AVAILABLE:
+        raise ImportError(
+            "mcp package is required for MCP server. "
+            "Install it with: pip install engram-ai[mcp]"
+        )
     import json
     import os
     from pathlib import Path
