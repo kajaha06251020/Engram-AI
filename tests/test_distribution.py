@@ -42,3 +42,36 @@ class TestMCPImportGuard:
                 mcp_mod.create_mcp_server(None)
         finally:
             importlib.reload(mcp_mod)
+
+
+class TestDashboardImportGuard:
+    def test_server_raises_import_error_when_fastapi_missing(self, monkeypatch):
+        """Dashboard server raises ImportError with install hint when fastapi missing."""
+        import importlib
+        import engram_ai.dashboard.server as server_mod
+        monkeypatch.setitem(sys.modules, "fastapi", None)
+        monkeypatch.setitem(sys.modules, "fastapi.staticfiles", None)
+        monkeypatch.setitem(sys.modules, "fastapi.responses", None)
+        monkeypatch.setitem(sys.modules, "starlette", None)
+        monkeypatch.setitem(sys.modules, "starlette.middleware", None)
+        monkeypatch.setitem(sys.modules, "starlette.middleware.cors", None)
+        importlib.reload(server_mod)
+        try:
+            with pytest.raises(ImportError, match="pip install engram-ai\\[dashboard\\]"):
+                server_mod.create_app(None)
+        finally:
+            importlib.reload(server_mod)
+
+    def test_api_raises_import_error_when_fastapi_missing(self, monkeypatch):
+        """Dashboard API raises ImportError with install hint when fastapi missing."""
+        import importlib
+        import engram_ai.dashboard.api as api_mod
+        monkeypatch.setitem(sys.modules, "fastapi", None)
+        monkeypatch.setitem(sys.modules, "starlette", None)
+        monkeypatch.setitem(sys.modules, "starlette.requests", None)
+        importlib.reload(api_mod)
+        try:
+            with pytest.raises(ImportError, match="pip install engram-ai\\[dashboard\\]"):
+                api_mod.create_router(None)
+        finally:
+            importlib.reload(api_mod)
