@@ -51,7 +51,7 @@ def test_check_skill_effectiveness_positive_hit(tmp_path, mock_llm):
         outcome="Faster queries",
         valence=0.8,
     )
-    forge.check_skill_effectiveness(exp)
+    forge._check_skill_effectiveness(exp)
     all_skills = forge._storage.get_all_skills()
     target = [s for s in all_skills if s.id == skill.id][0]
     assert target.prediction_hits >= 1
@@ -78,7 +78,7 @@ def test_check_skill_effectiveness_negative_miss(tmp_path, mock_llm):
         outcome="Still slow",
         valence=-0.5,
     )
-    forge.check_skill_effectiveness(exp)
+    forge._check_skill_effectiveness(exp)
     all_skills = forge._storage.get_all_skills()
     target = [s for s in all_skills if s.id == skill.id][0]
     assert target.prediction_misses >= 1
@@ -107,7 +107,7 @@ def test_check_skill_effectiveness_confidence_drop(tmp_path, mock_llm):
         outcome="Failed again",
         valence=-0.5,
     )
-    updated = forge.check_skill_effectiveness(exp)
+    updated = forge._check_skill_effectiveness(exp)
     assert len(updated) >= 1
     assert updated[0].confidence < 0.8
 
@@ -189,7 +189,7 @@ def test_teach_reinforces_similar(tmp_path, mock_llm):
 def test_recall_returns_skills(tmp_path, mock_llm):
     forge = Forge(storage_path=str(tmp_path / "data"), llm=mock_llm)
     forge.teach(rule="Use eager loading", context_pattern="database queries")
-    result = forge.recall("database queries optimization")
+    result = forge._recall("database queries optimization")
     assert "skills" in result
     assert "warnings" in result
     assert isinstance(result["skills"], list)
@@ -204,19 +204,19 @@ def test_recall_returns_warnings(tmp_path, mock_llm):
         outcome="Production outage",
         valence=-0.8,
     )
-    result = forge.recall("authentication system changes")
+    result = forge._recall("authentication system changes")
     assert "warnings" in result
 
 
 def test_recall_empty_context(tmp_path, mock_llm):
     forge = Forge(storage_path=str(tmp_path / "data"), llm=mock_llm)
-    result = forge.recall("")
+    result = forge._recall("")
     assert result == {"skills": [], "warnings": []}
 
 
 def test_recall_zero_k(tmp_path, mock_llm):
     forge = Forge(storage_path=str(tmp_path / "data"), llm=mock_llm)
-    result = forge.recall("test", k_skills=0, k_experiences=0)
+    result = forge._recall("test", k_skills=0, k_experiences=0)
     assert result == {"skills": [], "warnings": []}
 
 

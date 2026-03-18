@@ -361,7 +361,7 @@ def hook_user_prompt_submit():
 
         # Active Recall: inject relevant skills and warnings
         if user_message.strip():
-            recall_result = forge.recall(user_message)
+            recall_result = forge._recall(user_message)
             lines = []
             if recall_result["skills"]:
                 lines.append("Relevant knowledge:")
